@@ -1,0 +1,5 @@
+# Every change requires review from the repository owner.
+# Branch protection rules — including "Require review from Code Owners" — are
+# available for public repositories on all GitHub plans, so once this repo is
+# public this can be an enforced gate rather than an advisory review request.
+* @tehClayton
