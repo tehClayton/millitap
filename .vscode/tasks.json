@@ -1,0 +1,21 @@
+{
+	// A static site needs a server, not a debugger: service workers and the
+	// manifest only work over http, and file:// is not a secure context so
+	// registration silently fails. This is a task rather than a launch config
+	// because the devcontainer has no browser to launch into — VS Code forwards
+	// the port and you open it on the host instead.
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Serve site",
+			"detail": "python3 -m http.server on 8080, from the repo root",
+			"type": "shell",
+			"command": "python3 -m http.server 8080",
+			"options": { "cwd": "${workspaceFolder}" },
+			"isBackground": true,
+			"problemMatcher": [],
+			"runOptions": { "instanceLimit": 1 },
+			"presentation": { "reveal": "always", "panel": "dedicated" }
+		}
+	]
+}
