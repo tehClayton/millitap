@@ -514,7 +514,11 @@ function draw(ts){
    Only the last few hits are drawn, each fading as newer taps push it down the
    queue, so this shows the spread you are holding right now — accumulating the
    whole session is the histogram's job. */
-const DRIFT_N = 8;
+/* Dots age on the audio clock rather than on arrival, so one keeps fading while
+   you hesitate instead of freezing until the next tap lands. Squaring the
+   remaining life drops the tail away quickly, leaving only what you just played. */
+const DRIFT_LIFE = 1.6;   // seconds until a dot is gone entirely
+const DRIFT_MAX  = 5;     // cap, so sixteenths at a fast tempo can't crowd the axis
 
 function drawDrift(){
   if (!DW) return;
@@ -539,13 +543,17 @@ function drawDrift(){
   g3.beginPath(); g3.moveTo(cx+.5, 4); g3.lineTo(cx+.5, DH-4); g3.stroke();
   g3.globalAlpha=1;
 
-  const recent = taps.filter(t => t.kind==="hit").slice(-DRIFT_N);
-  recent.forEach((t,i) => {
-    const age = recent.length-1-i;          // 0 is the newest tap
-    g3.globalAlpha = Math.max(.12, 1 - age/DRIFT_N);
+  const now = ctx ? ctx.currentTime : 0;
+  const recent = taps
+    .filter(t => t.kind==="hit" && now - t.t < DRIFT_LIFE)
+    .slice(-DRIFT_MAX);
+
+  for (const t of recent){
+    const k = Math.max(0, 1 - (now - t.t)/DRIFT_LIFE);   // 1 fresh, 0 expired
+    g3.globalAlpha = k*k;
     g3.fillStyle = t.dev<-4 ? css("--rush") : t.dev>4 ? css("--drag") : css("--true");
-    g3.beginPath(); g3.arc(x(t.dev), dotY, age ? 4.5 : 7, 0, 6.284); g3.fill();
-  });
+    g3.beginPath(); g3.arc(x(t.dev), dotY, 4 + 3*k, 0, 6.284); g3.fill();
+  }
   g3.globalAlpha=1;
 }
 
