@@ -27,6 +27,12 @@
     --ui: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0}
+  /* The hidden attribute works through the UA stylesheet, and author rules beat
+     the UA sheet — so any `display` declaration on an element that also uses
+     hidden silently defeats it. #advBody sets display:grid and would never
+     collapse without this. Global rather than scoped, so the next element to
+     take a display rule can't quietly reintroduce the same bug. */
+  [hidden]{display:none!important}
   html,body{height:100%;overflow:hidden;overscroll-behavior:none}
   body{
     background:var(--ground); color:var(--ink); font-family:var(--ui);
