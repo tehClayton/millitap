@@ -103,12 +103,33 @@
   /* Floats over the displays rather than sitting in the flow. Opening it used
      to push the pads down mid-drill, which moves the target out from under the
      hand that is already on its way to it. */
-  .settings{position:fixed;z-index:20;left:10px;right:10px;
+  .settings{position:fixed;z-index:20;left:50%;transform:translateX(-50%);
+    width:calc(100% - 20px);max-width:640px;
     background:var(--panel);border:1px solid var(--rule);border-radius:8px;
     box-shadow:0 14px 30px rgba(0,0,0,.5);
     overflow-y:auto;-webkit-overflow-scrolling:touch}
   #scrim{position:fixed;inset:0;z-index:19;background:rgba(11,15,20,.5)}
-  .fields{padding:2px 12px 13px;display:grid;gap:11px}
+  /* Sections rather than a flat stack of labels: a hairline plus a small-caps
+     heading separates the groups in less vertical space than gaps alone, which
+     matters when the panel floats over the pads. */
+  .sect{display:grid;gap:7px;padding:11px 12px}
+  .sect + .sect{border-top:1px solid var(--rule)}
+  .sect h2{display:flex;align-items:baseline;gap:7px;font-size:10px;font-weight:600;
+    letter-spacing:.09em;text-transform:uppercase;color:var(--ink-dim)}
+  .hint{font-family:var(--fig);font-size:10px;font-weight:400;letter-spacing:0;
+    text-transform:none;color:var(--ink-dim);opacity:.7}
+  .two{display:flex;flex-wrap:wrap;gap:12px 22px}
+  .two>div{display:grid;gap:7px;align-content:start}
+
+  /* Calibration and the diagnostic are set-once-and-forget, so they fold away
+     and leave the panel showing only what changes between drills. */
+  .advbtn{display:flex;align-items:center;justify-content:flex-start;gap:7px;width:100%;
+    padding:0;background:none;border:none;font-family:inherit;font-size:10px;
+    font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-dim)}
+  .advbtn .chev{width:8px;height:8px;fill:currentColor;transition:transform .13s ease}
+  .advbtn[aria-expanded="true"]{color:var(--ink)}
+  .advbtn[aria-expanded="true"] .chev{transform:rotate(90deg)}
+  #advBody{display:grid;gap:11px;padding-top:9px}
   label{display:grid;gap:5px;font-size:13px;color:var(--ink-dim)}
   .check{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-dim)}
   .check input{width:19px;height:19px;accent-color:var(--miss);flex:0 0 auto}
@@ -194,30 +215,43 @@
 <div id="scrim" hidden></div>
 
 <div id="settings" class="settings" hidden>
-  <div class="fields">
-    <label>Meter<div class="pick" id="meterPick"></div></label>
+  <div class="sect">
+    <h2>Meter</h2>
+    <div class="pick" id="meterPick"></div>
+  </div>
 
-    <label>Note value<div class="pick" id="notePick"></div></label>
+  <div class="sect">
+    <h2>Note value</h2>
+    <div class="pick" id="notePick"></div>
+  </div>
 
-    <label>Feel <span class="val" id="feelHint"></span>
-      <div class="pick" id="feelPick"></div>
-    </label>
+  <div class="sect">
+    <h2>Feel <span class="hint" id="feelHint"></span></h2>
+    <div class="pick" id="feelPick"></div>
+  </div>
 
-    <label>Click <span class="val">off → on → accent</span>
-      <div class="grid" id="clickGrid"></div>
-    </label>
+  <div class="sect">
+    <h2>Click <span class="hint">off → on → accent</span></h2>
+    <div class="grid" id="clickGrid"></div>
+  </div>
 
-    <div class="row">
-      <label>Pads<select id="padCount"></select></label>
-      <label>Count-in
-        <select id="countIn">
-          <option value="0">off</option>
-          <option value="1" selected>one bar</option>
-          <option value="2">two bars</option>
-        </select>
-      </label>
+  <div class="sect two">
+    <div>
+      <h2>Pads</h2>
+      <div class="pick" id="padPick"></div>
     </div>
+    <div>
+      <h2>Count-in <span class="hint">bars</span></h2>
+      <div class="pick" id="countPick"></div>
+    </div>
+  </div>
 
+  <div class="sect">
+    <button type="button" id="advToggle" class="advbtn" aria-expanded="false">
+      <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7z"/></svg>
+      Advanced
+    </button>
+    <div id="advBody" hidden>
     <label>Audio offset <span class="val" id="offv">0 ms</span>
       <input id="off" type="range" min="-40" max="220" value="0" step="1">
     </label>
@@ -245,6 +279,7 @@
       climb into the tens of milliseconds. <b>If lag climbs but your spread doesn't, the timestamps
       are hardware-derived</b> and page stalls can't corrupt your readings. If spread climbs with
       it, the web version has a ceiling and native is the fix.</p>
+    </div>
   </div>
 </div>
 
@@ -769,7 +804,29 @@ function renderPickers(){
     fp.appendChild(b);
   }
 
-  $("feelHint").textContent = cfg.feel ? "sets its own bar — tap again to clear" : "";
+  const pp=$("padPick"); pp.innerHTML="";
+  for (let n=1;n<=8;n++){
+    const b=chip("fig", cfg.pads===n);
+    b.textContent=String(n);
+    b.setAttribute("aria-label", n===1 ? "1 pad" : n+" pads");
+    b.onclick=()=>{
+      cfg.pads=n; buildPads(); renderPickers();
+      if (running){ stop(); start(); }
+      clearAll();
+    };
+    pp.appendChild(b);
+  }
+
+  const cp=$("countPick"); cp.innerHTML="";
+  for (const [v,lab] of [[0,"off"],[1,"1"],[2,"2"]]){
+    const b=chip("fig", cfg.countIn===v);
+    b.textContent=lab;
+    b.setAttribute("aria-label", v ? v+" bar count-in" : "no count-in");
+    b.onclick=()=>{ cfg.countIn=v; renderPickers(); };
+    cp.appendChild(b);
+  }
+
+  $("feelHint").textContent = cfg.feel ? "own bar — tap again to clear" : "";
 }
 
 /* The playhead is a class swap on one cell rather than a redraw, so the grid can
@@ -821,12 +878,11 @@ function rebuild(){
   clearAll();
 }
 
-const pc=$("padCount");
-for (let i=1;i<=8;i++) pc.add(new Option(i===1?"1 pad":i+" pads", i));
-pc.value=cfg.pads;
-pc.onchange = ()=>{ cfg.pads=+pc.value; buildPads(); if(running){stop();start();} clearAll(); };
-
-$("countIn").onchange   = e=>{ cfg.countIn=+e.target.value; };
+$("advToggle").onclick = () => {
+  const body=$("advBody"), open=body.hidden;
+  body.hidden = !open;
+  $("advToggle").setAttribute("aria-expanded", String(open));
+};
 $("bpm").oninput = e=>{
   cfg.bpm=+e.target.value; $("bpmv").textContent=cfg.bpm;
   if (running){ stop(); start(); clearAll(); }
