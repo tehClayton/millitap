@@ -100,8 +100,14 @@
   .pad.lit{background:var(--panel-hi)}
   .pad.fresh{border-color:currentColor}
 
-  .settings{background:var(--panel);border:1px solid var(--rule);border-radius:8px;
-    flex:0 0 auto;max-height:46vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  /* Floats over the displays rather than sitting in the flow. Opening it used
+     to push the pads down mid-drill, which moves the target out from under the
+     hand that is already on its way to it. */
+  .settings{position:fixed;z-index:20;left:10px;right:10px;
+    background:var(--panel);border:1px solid var(--rule);border-radius:8px;
+    box-shadow:0 14px 30px rgba(0,0,0,.5);
+    overflow-y:auto;-webkit-overflow-scrolling:touch}
+  #scrim{position:fixed;inset:0;z-index:19;background:rgba(11,15,20,.5)}
   .fields{padding:2px 12px 13px;display:grid;gap:11px}
   label{display:grid;gap:5px;font-size:13px;color:var(--ink-dim)}
   .check{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-dim)}
@@ -159,6 +165,8 @@
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a7.07 7.07 0 0 0 .06-.94 7.07 7.07 0 0 0-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.12.22.38.3.6.22l2.39-.96c.49.38 1.03.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.48 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
   </button>
 </div>
+
+<div id="scrim" hidden></div>
 
 <div id="settings" class="settings" hidden>
   <div class="fields">
@@ -596,6 +604,7 @@ function buildPads(){
 
 addEventListener("keydown", e => {
   if (e.repeat) return;
+  if (e.key==="Escape"){ setSettings(false); return; }
   if (e.code==="Space"){ e.preventDefault(); toggle(); return; }
   const n = parseInt(e.key,10);
   if (n>=1 && n<=cfg.pads && ctx){ e.preventDefault(); tap(n-1, e.timeStamp); }
@@ -653,13 +662,25 @@ $("run").onclick = toggle;
 $("clear").onclick = clearAll;
 
 /* A plain div rather than <details>, because the gear lives up in the transport
-   row and a <summary> would have to sit inside the panel it opens. */
-$("gear").onclick = () => {
-  const open = $("settings").hidden;
-  $("settings").hidden = !open;
+   row and a <summary> would have to sit inside the panel it opens.
+
+   Top is measured when it opens rather than hard-coded, so the panel stays
+   pinned under the transport however the row above it happens to wrap. */
+function setSettings(open){
+  const s=$("settings");
+  if (open){
+    const r = document.querySelector(".transport").getBoundingClientRect();
+    s.style.top = Math.round(r.bottom + 8) + "px";
+    s.style.maxHeight = "calc(100vh - " + Math.round(r.bottom + 22) + "px)";
+  }
+  s.hidden = !open;
+  $("scrim").hidden = !open;
   $("gear").classList.toggle("on", open);
   $("gear").setAttribute("aria-expanded", String(open));
-};
+}
+
+$("gear").onclick  = () => setSettings($("settings").hidden);
+$("scrim").onclick = () => setSettings(false);
 
 /* Deliberately stall the main thread, to test whether touch timestamps
    survive it. Interval is prime-ish so it never locks to the beat. */
