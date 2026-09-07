@@ -37,6 +37,15 @@
     gap:10px;
   }
 
+  /* Deliberately small: standalone launch buys back roughly 100px of height
+     for the pads, and a tall header would hand it straight back. */
+  .topbar{display:flex;align-items:center;gap:7px;flex:0 0 auto;padding:0 2px}
+  .topbar h1{font-size:14px;font-weight:600;color:var(--ink);letter-spacing:.005em}
+  .mark{width:20px;height:20px;flex:0 0 auto}
+  .mark line{stroke:var(--true);stroke-width:1.7;stroke-linecap:round}
+  .mark .e{fill:var(--rush)}
+  .mark .l{fill:var(--drag)}
+
   .transport{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   button{font-family:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--rule);
     border-radius:6px;padding:9px 14px;font-size:15px;cursor:pointer}
@@ -116,6 +125,17 @@
 </style>
 </head>
 <body>
+
+<header class="topbar">
+  <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+    <line x1="3.8" y1="12" x2="20.2" y2="12"/>
+    <circle class="e" cx="7.2"  cy="7.8"  r="1.7"/>
+    <circle class="e" cx="11.3" cy="10.0" r="1.7"/>
+    <circle class="l" cx="15.4" cy="14.5" r="1.7"/>
+    <circle class="l" cx="19.0" cy="16.7" r="1.7"/>
+  </svg>
+  <h1>millitap</h1>
+</header>
 
 <div class="readout">
   <div class="stat" id="mLast"><b>—</b><i>last tap</i></div>
