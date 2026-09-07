@@ -420,7 +420,10 @@ function draw(ts){
   const now = ctx ? ctx.currentTime : 0;
   const pad=16, cy=H/2, half=H/2-pad;
   const hist=86, sx=0, sw=W-hist-10;
-  const y = d => cy - Math.max(-1.6, Math.min(1.6, d/RANGE))*half;
+  /* Negative dev is early. Adding it moves the dot up the canvas, putting
+     rushing above the centre line and dragging below, which is what the axis
+     labels and the README have always claimed. */
+  const y = d => cy + Math.max(-1.6, Math.min(1.6, d/RANGE))*half;
 
   const hits = taps.filter(x=>x.kind==="hit");
   if (hits.length > 8){
