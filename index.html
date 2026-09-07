@@ -115,6 +115,28 @@
   select,input[type=range]{font-family:inherit;font-size:15px;color:var(--ink);
     background:var(--panel-hi);border:1px solid var(--rule);border-radius:6px;padding:7px;width:100%}
   input[type=range]{padding:0;accent-color:var(--drag);background:none;border:none}
+  .pick{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{padding:7px 11px;font-size:13px;border-radius:6px;background:var(--panel-hi);
+    border:1px solid var(--rule);color:var(--ink);line-height:1}
+  .chip.fig{font-family:var(--fig)}
+  .chip.sm{font-size:12px;padding:6px 9px;color:var(--ink-dim)}
+  .chip.glyph{padding:4px 8px;min-width:46px;display:flex;align-items:center;justify-content:center}
+  .chip.glyph svg{height:24px;width:auto;fill:currentColor;display:block}
+  .chip.sel{background:var(--true);border-color:var(--true);color:#122018}
+  .chip:disabled{opacity:.3}
+
+  /* One cell per subdivision. Beat cells carry the count and a brighter edge, so
+     the bar stays readable at sixteenths in 7/8 where there are 28 of them. */
+  .grid{display:flex;flex-wrap:wrap;gap:4px;padding-top:2px}
+  .cell{position:relative;width:26px;height:32px;padding:0;border-radius:5px;
+    background:transparent;border:1px solid var(--rule)}
+  .cell.beat{border-color:var(--ink-dim)}
+  .cell.s1{background:var(--ink-dim);border-color:var(--ink-dim)}
+  .cell.s2{background:var(--true);border-color:var(--true)}
+  .cell.beat::after{content:attr(data-n);position:absolute;top:1px;left:0;right:0;
+    font-size:9px;font-family:var(--fig);color:var(--ink-dim)}
+  .cell.s1.beat::after,.cell.s2.beat::after{color:#122018}
+
   .row{display:flex;gap:10px}
   .row>*{flex:1;min-width:0}
   .val{font-family:var(--fig);color:var(--ink);font-variant-numeric:tabular-nums}
@@ -170,19 +192,20 @@
 
 <div id="settings" class="settings" hidden>
   <div class="fields">
+    <label>Meter<div class="pick" id="meterPick"></div></label>
+
+    <label>Note value<div class="pick" id="notePick"></div></label>
+
+    <label>Feel <span class="val" id="feelHint"></span>
+      <div class="pick" id="feelPick"></div>
+    </label>
+
+    <label>Click <span class="val">off → on → accent</span>
+      <div class="grid" id="clickGrid"></div>
+    </label>
+
     <div class="row">
-      <label>Rhythm<select id="pattern"></select></label>
       <label>Pads<select id="padCount"></select></label>
-    </div>
-    <div class="row">
-      <label>Click plays
-        <select id="clickMode">
-          <option value="pattern">the whole rhythm</option>
-          <option value="quarters" selected>quarter notes only</option>
-          <option value="downbeat">downbeats only</option>
-          <option value="none">nothing (silent)</option>
-        </select>
-      </label>
       <label>Count-in
         <select id="countIn">
           <option value="0">off</option>
@@ -248,28 +271,69 @@
 const seq = (n, step, o) =>
   Array.from({length:n}, (_,i) => ({p:i*step, o:(o && i%2 ? o : 0)}));
 
-const PATTERNS = [
-  {id:"q",     name:"Quarter notes",            beats:4, on:seq(4,1)},
-  {id:"e",     name:"Eighth notes",             beats:4, on:seq(8,0.5)},
-  {id:"s",     name:"Sixteenth notes",          beats:4, on:seq(16,0.25)},
-  {id:"t",     name:"Eighth-note triplets",     beats:4, on:seq(12,1/3)},
-  {id:"sw67",  name:"Swung eighths — triplet",  beats:4, on:seq(8,0.5, 1/6)},
-  {id:"sw58",  name:"Swung eighths — light",    beats:4, on:seq(8,0.5, 0.085)},
-  {id:"off",   name:"Offbeat eighths only",     beats:4, on:[{p:0.5},{p:1.5},{p:2.5},{p:3.5}]},
-  {id:"bb",    name:"Backbeats — dead centre",  beats:4, on:[{p:1},{p:3}]},
-  {id:"bblb",  name:"Backbeats — laid back",    beats:4, on:[{p:1,o:0.05},{p:3,o:0.05}]},
-  {id:"bbpu",  name:"Backbeats — pushed",       beats:4, on:[{p:1,o:-0.04},{p:3,o:-0.04}]},
-  {id:"clave", name:"Son clave 3–2",            beats:8, on:[{p:0},{p:1.5},{p:3},{p:5},{p:6}]},
+/* Meter is a bar length counted in beat units, and bpm always sets the rate of
+   that unit — so 6/8 is six clicks to the bar rather than two dotted-quarter
+   pulses. Less musically nuanced, but unambiguous, which is what matters when
+   the whole exercise is measuring against the click. */
+const METERS = [
+  {id:"4/4", beats:4},
+  {id:"3/4", beats:3},
+  {id:"6/8", beats:6},
+  {id:"5/4", beats:5},
+  {id:"7/8", beats:7},
+];
+
+/* Note values are generated against whichever meter is selected; sub is how many
+   onsets fit in a beat. */
+const NOTES = [
+  {id:"q", name:"Quarter notes",        sub:1},
+  {id:"e", name:"Eighth notes",         sub:2},
+  {id:"t", name:"Eighth-note triplets", sub:3},
+  {id:"s", name:"Sixteenth notes",      sub:4},
+];
+
+/* Feels carry microtiming or a fixed shape that only makes sense at a set bar
+   length, so each defines its own and overrides the meter while selected. */
+const FEELS = [
+  {id:"sw67",  name:"Swung — triplet",   beats:4, on:seq(8,0.5, 1/6)},
+  {id:"sw58",  name:"Swung — light",     beats:4, on:seq(8,0.5, 0.085)},
+  {id:"off",   name:"Offbeat eighths",   beats:4, on:[{p:0.5},{p:1.5},{p:2.5},{p:3.5}]},
+  {id:"bb",    name:"Backbeats",         beats:4, on:[{p:1},{p:3}]},
+  {id:"bblb",  name:"Backbeats — laid back", beats:4, on:[{p:1,o:0.05},{p:3,o:0.05}]},
+  {id:"bbpu",  name:"Backbeats — pushed",    beats:4, on:[{p:1,o:-0.04},{p:3,o:-0.04}]},
+  {id:"clave", name:"Son clave 3–2",     beats:8, on:[{p:0},{p:1.5},{p:3},{p:5},{p:6}]},
 ];
 
 /* ============================== state ============================== */
 let ctx=null, running=false, startTime=0, clickFrom=0;
-let nextOnset=0, nextBeat=0, targets=[], taps=[], missed=0, extra=0;
+let nextOnset=0, nextCell=0, targets=[], taps=[], missed=0, extra=0;
 let padEls=[], schedTimer=null, stressTimer=null;
 
-const cfg = { bpm:84, pattern:PATTERNS[0], pads:2, click:"quarters", countIn:1, offset:0 };
+/* click is one state per grid cell: 0 off, 1 on, 2 accent. */
+const cfg = { bpm:84, meter:METERS[0], note:NOTES[0], feel:null,
+              pattern:null, click:[], pads:2, countIn:1, offset:0 };
 const LOOKAHEAD=0.18, TICK=25, HISTORY=10;
 const beatDur = () => 60/cfg.bpm;
+
+/* One grid cell per subdivision of the current pattern. A feel's onsets are
+   uneven, so it gets a plain eighth-note grid for its clicks to sit on. */
+const gridSub = () => cfg.feel ? 2 : cfg.note.sub;
+
+function buildPattern(){
+  cfg.pattern = cfg.feel
+    ? {beats: cfg.feel.beats, on: cfg.feel.on}
+    : {beats: cfg.meter.beats,
+       on: seq(cfg.meter.beats*cfg.note.sub, 1/cfg.note.sub)};
+}
+
+/* Beats on, downbeat accented, subdivisions off — what "quarter notes only"
+   used to mean, now just one reachable state of the grid among many. */
+function defaultClick(){
+  const sub=gridSub(), n=cfg.pattern.beats*sub;
+  cfg.click = Array.from({length:n}, (_,i) => i%sub ? 0 : (i ? 1 : 2));
+}
+
+buildPattern(); defaultClick();
 
 function captureWindow(){
   const on=cfg.pattern.on, b=beatDur();
@@ -316,17 +380,20 @@ function schedule(){
     const k=nextOnset%len, o=on[k];
     const t = startTime + (Math.floor(nextOnset/len)*bars + o.p + (o.o||0))*b;
     targets.push({t, voice:(o.v!=null?o.v:k)%cfg.pads, claimed:false, done:false});
-    if (cfg.click==="pattern" && t>=clickFrom) click(t, k===0);
     nextOnset++;
   }
 
-  while (startTime + nextBeat*b < horizon){
-    const t = startTime + nextBeat*b, down = nextBeat % bars === 0;
+  /* One pass per grid cell rather than per beat, so an accent can land on any
+     subdivision. Read live from cfg.click, so editing the grid mid-drill takes
+     effect as soon as the lookahead window rolls past. */
+  const sub=gridSub(), cells=cfg.click.length, step=b/sub;
+  while (startTime + nextCell*step < horizon){
+    const t = startTime + nextCell*step;
+    const i = ((nextCell % cells) + cells) % cells;   // count-in runs negative
     if (t >= clickFrom - 1e-9){
-      if (cfg.click==="quarters") click(t, down);
-      else if (cfg.click==="downbeat" && down) click(t, true);
-    } else click(t, down);           // count-in is always audible
-    nextBeat++;
+      if (cfg.click[i]) click(t, cfg.click[i]===2);
+    } else if (i % sub === 0) click(t, i===0);        // count-in is always audible
+    nextCell++;
   }
 
   const cutoff = ctx.currentTime - HISTORY - 1;
@@ -617,11 +684,11 @@ function start(){
   if (!ctx) ctx = new (window.AudioContext||window.webkitAudioContext)({latencyHint:"interactive"});
   if (ctx.state==="suspended") ctx.resume();
 
-  targets=[]; nextOnset=0; nextBeat=0;
+  targets=[]; nextOnset=0; nextCell=0;
   const lead=0.25, inBeats=cfg.countIn*cfg.pattern.beats;
   clickFrom = ctx.currentTime + lead;
   startTime = clickFrom + inBeats*beatDur();
-  if (inBeats) nextBeat = -inBeats;
+  if (inBeats) nextCell = -inBeats*gridSub();
 
   running=true;
   $("run").classList.add("on"); $("run").setAttribute("aria-label","Stop");
@@ -641,16 +708,96 @@ function clearAll(){
 }
 
 /* ============================== controls ============================== */
-const ps=$("pattern");
-PATTERNS.forEach((p,i)=>ps.add(new Option(p.name,i)));
-ps.onchange = ()=>{ cfg.pattern=PATTERNS[+ps.value]; if(running){stop();start();} clearAll(); };
+/* Note glyphs are drawn rather than typed: the Unicode music symbols render
+   inconsistently across iOS fonts, and the sixteenth has no reliable glyph. */
+const STEM = '<rect x="15.6" y="4" width="1.6" height="14"/>';
+const HEAD = '<ellipse cx="12" cy="18" rx="4.6" ry="3.4" transform="rotate(-22 12 18)"/>';
+const FLAG = y => '<path d="M17.2 '+y+'c4 1.6 5.9 4 5 7.2 2.2-3.7.6-6.6-5-8.9z"/>';
+const svg  = inner => '<svg viewBox="0 0 30 24" aria-hidden="true">'+inner+'</svg>';
+
+const NOTE_SVG = {
+  q: svg(HEAD+STEM),
+  e: svg(HEAD+STEM+FLAG(4.3)),
+  s: svg(HEAD+STEM+FLAG(4.3)+FLAG(9.2)),
+  t: svg(
+    '<ellipse cx="5.5" cy="19" rx="3.5" ry="2.6" transform="rotate(-22 5.5 19)"/>'+
+    '<ellipse cx="14" cy="19" rx="3.5" ry="2.6" transform="rotate(-22 14 19)"/>'+
+    '<ellipse cx="22.5" cy="19" rx="3.5" ry="2.6" transform="rotate(-22 22.5 19)"/>'+
+    '<rect x="8.2" y="10" width="1.4" height="9"/>'+
+    '<rect x="16.7" y="10" width="1.4" height="9"/>'+
+    '<rect x="25.2" y="10" width="1.4" height="9"/>'+
+    '<rect x="8.2" y="10" width="18.4" height="2"/>'+
+    '<text x="17" y="7" font-size="9" text-anchor="middle" font-style="italic">3</text>')
+};
+
+function chip(cls, sel){
+  const b=document.createElement("button");
+  b.type="button"; b.className="chip "+cls+(sel?" sel":"");
+  return b;
+}
+
+function renderPickers(){
+  const mp=$("meterPick"); mp.innerHTML="";
+  for (const m of METERS){
+    const b=chip("fig", !cfg.feel && cfg.meter===m);
+    b.textContent=m.id;
+    b.disabled=!!cfg.feel;
+    b.onclick=()=>{ cfg.meter=m; rebuild(); };
+    mp.appendChild(b);
+  }
+
+  const np=$("notePick"); np.innerHTML="";
+  for (const n of NOTES){
+    const b=chip("glyph", !cfg.feel && cfg.note===n);
+    b.innerHTML=NOTE_SVG[n.id];
+    b.setAttribute("aria-label", n.name);
+    b.title=n.name;
+    b.onclick=()=>{ cfg.note=n; cfg.feel=null; rebuild(); };
+    np.appendChild(b);
+  }
+
+  const fp=$("feelPick"); fp.innerHTML="";
+  for (const f of FEELS){
+    const b=chip("sm", cfg.feel===f);
+    b.textContent=f.name;
+    b.onclick=()=>{ cfg.feel = cfg.feel===f ? null : f; rebuild(); };
+    fp.appendChild(b);
+  }
+
+  $("feelHint").textContent = cfg.feel ? "sets its own bar — tap again to clear" : "";
+}
+
+function renderGrid(){
+  const host=$("clickGrid"); host.innerHTML="";
+  const sub=gridSub(), names=["off","on","accent"];
+  cfg.click.forEach((state,i) => {
+    const beat = i%sub===0;
+    const b=document.createElement("button");
+    b.type="button";
+    b.className="cell s"+state+(beat?" beat":"");
+    if (beat) b.dataset.n = String(Math.floor(i/sub)+1);
+    b.setAttribute("aria-label",
+      "beat "+(Math.floor(i/sub)+1)+(beat?"":" +"+(i%sub))+": "+names[state]);
+    b.onclick=()=>{ cfg.click[i]=(cfg.click[i]+1)%3; renderGrid(); };
+    host.appendChild(b);
+  });
+}
+
+/* Meter and note value both change how many cells the bar has, so the grid is
+   rebuilt from the default rather than stretched — there is no honest mapping
+   from four cells of edits onto seven. */
+function rebuild(){
+  buildPattern(); defaultClick();
+  renderPickers(); renderGrid();
+  if (running){ stop(); start(); }
+  clearAll();
+}
 
 const pc=$("padCount");
 for (let i=1;i<=8;i++) pc.add(new Option(i===1?"1 pad":i+" pads", i));
 pc.value=cfg.pads;
 pc.onchange = ()=>{ cfg.pads=+pc.value; buildPads(); if(running){stop();start();} clearAll(); };
 
-$("clickMode").onchange = e=>{ cfg.click=e.target.value; if(running){stop();start();} };
 $("countIn").onchange   = e=>{ cfg.countIn=+e.target.value; };
 $("bpm").oninput = e=>{
   cfg.bpm=+e.target.value; $("bpmv").textContent=cfg.bpm;
@@ -694,7 +841,7 @@ $("stress").onchange = e => {
   } else { jank = 0; }
 };
 
-buildPads(); resize(); stats();
+renderPickers(); renderGrid(); buildPads(); resize(); stats();
 
 /* ============================== install ============================== */
 if ("serviceWorker" in navigator){
