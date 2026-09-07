@@ -8,6 +8,7 @@ const CACHE = `millitap-${VERSION}`;
 const ASSETS = [
   "./",
   "./index.html",
+  "./history.html",
   "./store.js",
   "./manifest.webmanifest",
   "./apple-touch-icon.png",
