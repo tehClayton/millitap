@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="millitap">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1B2430">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>millitap</title>
+<style>
+  :root{
+    --ground:#1B2430;
+    --panel:#232F3D;
+    --panel-hi:#2C3A4B;
+    --rule:#3B4B5F;
+    --ink:#E6ECF3;
+    --ink-dim:#8A9BAF;
+    --rush:#E8A33D;
+    --drag:#4FA3C7;
+    --true:#7FCB8F;
+    --miss:#C2566B;
+    --fig: ui-monospace, "SF Mono", Menlo, monospace;
+    --ui: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+  body{
+    background:var(--ground); color:var(--ink); font-family:var(--ui);
+    -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+    display:flex; flex-direction:column;
+    padding:max(10px,env(safe-area-inset-top)) 10px max(10px,env(safe-area-inset-bottom));
+    gap:10px;
+  }
+
+  .transport{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  button{font-family:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--rule);
+    border-radius:6px;padding:9px 14px;font-size:15px;cursor:pointer}
+  button:active{background:var(--panel-hi)}
+  button:focus-visible{outline:2px solid var(--true);outline-offset:2px}
+  #run{min-width:104px;font-weight:600;font-variant-numeric:tabular-nums}
+  #run.on{background:var(--true);border-color:var(--true);color:#122018}
+  .tempo{display:flex;align-items:center;gap:9px;flex:1;min-width:210px}
+  .tempo input[type=range]{flex:1;accent-color:var(--drag);min-width:80px}
+  .bpm{font-family:var(--fig);font-size:23px;font-variant-numeric:tabular-nums;min-width:3.2ch;text-align:right}
+  .bpm span{font-size:11px;color:var(--ink-dim);margin-left:3px}
+
+  .display{flex:0 0 auto;position:relative;background:var(--panel);border:1px solid var(--rule);
+    border-radius:8px;overflow:hidden}
+  canvas{display:block;width:100%;height:210px}
+  .axis{position:absolute;left:9px;font-family:var(--fig);font-size:10px;pointer-events:none}
+  .axis.hi{top:7px;color:var(--rush)}
+  .axis.lo{bottom:7px;color:var(--drag)}
+
+  .readout{display:flex;gap:8px;align-items:stretch}
+  .stat{flex:1;background:var(--panel);border:1px solid var(--rule);border-radius:8px;
+    padding:7px 10px 9px;min-width:0}
+  .stat b{display:block;font-family:var(--fig);font-size:26px;font-weight:500;
+    font-variant-numeric:tabular-nums;line-height:1.15;white-space:nowrap}
+  .stat i{display:block;font-style:normal;font-size:11px;color:var(--ink-dim)}
+  .stat .sl{color:var(--ink-dim);font-size:15px}
+  #mLast b{font-size:32px}
+
+  .pads{flex:1 1 auto;display:flex;gap:9px;min-height:110px}
+  .pad{flex:1;background:var(--panel);border:1px solid var(--rule);border-radius:10px;
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--fig);font-size:30px;color:var(--ink-dim);
+    touch-action:none;transition:background .05s linear,border-color .05s linear;min-width:0}
+  .pad.lit{background:var(--panel-hi)}
+  .pad.fresh{border-color:currentColor}
+
+  details{background:var(--panel);border:1px solid var(--rule);border-radius:8px;flex:0 0 auto}
+  summary{padding:9px 12px;font-size:14px;color:var(--ink-dim);cursor:pointer;list-style:none}
+  summary::-webkit-details-marker{display:none}
+  summary::before{content:"Settings  ▸"}
+  details[open] summary::before{content:"Settings  ▾"}
+  details[open]{max-height:46vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .fields{padding:2px 12px 13px;display:grid;gap:11px}
+  label{display:grid;gap:5px;font-size:13px;color:var(--ink-dim)}
+  .check{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-dim)}
+  .check input{width:19px;height:19px;accent-color:var(--miss);flex:0 0 auto}
+  select,input[type=range]{font-family:inherit;font-size:15px;color:var(--ink);
+    background:var(--panel-hi);border:1px solid var(--rule);border-radius:6px;padding:7px;width:100%}
+  input[type=range]{padding:0;accent-color:var(--drag);background:none;border:none}
+  .row{display:flex;gap:10px}
+  .row>*{flex:1;min-width:0}
+  .val{font-family:var(--fig);color:var(--ink);font-variant-numeric:tabular-nums}
+  .note{font-size:12px;line-height:1.5;color:var(--ink-dim);max-width:64ch}
+  .note b{color:var(--ink);font-weight:600}
+  hr{border:none;border-top:1px solid var(--rule);margin:3px 0}
+  .diag{font-family:var(--fig);font-size:12px;color:var(--ink-dim);
+    background:var(--panel-hi);border-radius:6px;padding:9px 10px;line-height:1.75}
+  .diag b{color:var(--ink);font-weight:500}
+
+  #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom));
+    background:var(--true);color:#122018;padding:10px 16px;border-radius:7px;font-size:14px;
+    font-weight:600;display:none;z-index:9}
+</style>
+</head>
+<body>
+
+<div class="transport">
+  <button id="run">Start</button>
+  <div class="tempo">
+    <input id="bpm" type="range" min="30" max="220" value="84" step="1" aria-label="Tempo">
+    <div class="bpm"><span id="bpmv">84</span><span>bpm</span></div>
+  </div>
+  <button id="clear">Clear</button>
+</div>
+
+<div class="display">
+  <canvas id="cv"></canvas>
+  <div class="axis hi">rushing</div>
+  <div class="axis lo">dragging</div>
+</div>
+
+<div class="readout">
+  <div class="stat" id="mLast"><b>—</b><i>last tap</i></div>
+  <div class="stat"><b id="mMean">—</b><i>average</i></div>
+  <div class="stat"><b id="mSd">—</b><i>spread</i></div>
+  <div class="stat"><b id="mN">0</b><i>taps</i></div>
+  <div class="stat"><b id="mErr">0<span class="sl"> / </span>0</b><i>missed / extra</i></div>
+</div>
+
+<div class="pads" id="pads"></div>
+
+<details>
+  <summary></summary>
+  <div class="fields">
+    <div class="row">
+      <label>Rhythm<select id="pattern"></select></label>
+      <label>Pads<select id="padCount"></select></label>
+    </div>
+    <div class="row">
+      <label>Click plays
+        <select id="clickMode">
+          <option value="pattern">the whole rhythm</option>
+          <option value="quarters" selected>quarter notes only</option>
+          <option value="downbeat">downbeats only</option>
+          <option value="none">nothing (silent)</option>
+        </select>
+      </label>
+      <label>Count-in
+        <select id="countIn">
+          <option value="0">off</option>
+          <option value="1" selected>one bar</option>
+          <option value="2">two bars</option>
+        </select>
+      </label>
+    </div>
+
+    <label>Audio offset <span class="val" id="offv">0 ms</span>
+      <input id="off" type="range" min="-40" max="220" value="0" step="1">
+    </label>
+    <p class="note">Timing is measured against the audio clock, and the browser's reported output
+      latency is already subtracted. Use this only if your gear adds delay the browser can't see —
+      Bluetooth headphones add 100–300&nbsp;ms and report it unreliably. Wired or the built-in
+      speaker gives far cleaner numbers.</p>
+    <p class="note">If your average sits 20–50&nbsp;ms ahead, that's probably real. Tapping slightly
+      early against a metronome is a well-documented perceptual effect, not a fault in your playing
+      or your offset. <b>Don't dial it out</b> — it's one of the things worth watching.</p>
+
+    <hr>
+
+    <div class="check">
+      <input type="checkbox" id="stress">
+      <label for="stress" style="display:inline">Jam the main thread (diagnostic)</label>
+    </div>
+    <div class="diag" id="diagBox">
+      touch→handler lag &nbsp;<b id="dLag">—</b><br>
+      worst frame gap &nbsp;<b id="dJank">—</b>
+    </div>
+    <p class="note">This answers whether Safari's touch timestamps come from the hardware or from
+      whenever the page got round to handling them. Run a normal drill and note your spread. Turn
+      this on and run the same drill: it will deliberately stall the page, and the lag figure will
+      climb into the tens of milliseconds. <b>If lag climbs but your spread doesn't, the timestamps
+      are hardware-derived</b> and page stalls can't corrupt your readings. If spread climbs with
+      it, the web version has a ceiling and native is the fix.</p>
+  </div>
+</details>
+
+<div id="toast">Updated — tap to reload</div>
+
+<script>
+"use strict";
+
+/* ============================== rhythms ==============================
+   p = position in beats. o = microtiming offset as a fraction of a beat,
+   so a feel survives a tempo change. v = voice (pad), defaulting to
+   alternating across whatever pads exist. */
+const seq = (n, step, o) =>
+  Array.from({length:n}, (_,i) => ({p:i*step, o:(o && i%2 ? o : 0)}));
+
+const PATTERNS = [
+  {id:"q",     name:"Quarter notes",            beats:4, on:seq(4,1)},
+  {id:"e",     name:"Eighth notes",             beats:4, on:seq(8,0.5)},
+  {id:"s",     name:"Sixteenth notes",          beats:4, on:seq(16,0.25)},
+  {id:"t",     name:"Eighth-note triplets",     beats:4, on:seq(12,1/3)},
+  {id:"sw67",  name:"Swung eighths — triplet",  beats:4, on:seq(8,0.5, 1/6)},
+  {id:"sw58",  name:"Swung eighths — light",    beats:4, on:seq(8,0.5, 0.085)},
+  {id:"off",   name:"Offbeat eighths only",     beats:4, on:[{p:0.5},{p:1.5},{p:2.5},{p:3.5}]},
+  {id:"bb",    name:"Backbeats — dead centre",  beats:4, on:[{p:1},{p:3}]},
+  {id:"bblb",  name:"Backbeats — laid back",    beats:4, on:[{p:1,o:0.05},{p:3,o:0.05}]},
+  {id:"bbpu",  name:"Backbeats — pushed",       beats:4, on:[{p:1,o:-0.04},{p:3,o:-0.04}]},
+  {id:"clave", name:"Son clave 3–2",            beats:8, on:[{p:0},{p:1.5},{p:3},{p:5},{p:6}]},
+];
+
+/* ============================== state ============================== */
+let ctx=null, running=false, startTime=0, clickFrom=0;
+let nextOnset=0, nextBeat=0, targets=[], taps=[], missed=0, extra=0;
+let padEls=[], schedTimer=null, stressTimer=null;
+
+const cfg = { bpm:84, pattern:PATTERNS[0], pads:2, click:"quarters", countIn:1, offset:0 };
+const LOOKAHEAD=0.18, TICK=25, HISTORY=10;
+const beatDur = () => 60/cfg.bpm;
+
+function captureWindow(){
+  const on=cfg.pattern.on, b=beatDur();
+  let min=cfg.pattern.beats;
+  for (let i=0;i<on.length;i++){
+    const a=on[i].p+(on[i].o||0);
+    const nx = i+1<on.length ? on[i+1].p+(on[i+1].o||0)
+                             : cfg.pattern.beats+on[0].p+(on[0].o||0);
+    min=Math.min(min,nx-a);
+  }
+  return Math.min(min*b*0.4, 0.25);
+}
+
+function latency(){
+  const base = ctx ? (ctx.outputLatency || ctx.baseLatency || 0) : 0;
+  return base + cfg.offset/1000;
+}
+
+/* performance.now() ms -> AudioContext seconds */
+function toCtx(perfMs){
+  const ts = ctx.getOutputTimestamp ? ctx.getOutputTimestamp() : null;
+  if (ts && ts.contextTime != null && ts.performanceTime)
+    return ts.contextTime + (perfMs - ts.performanceTime)/1000;
+  return ctx.currentTime - (performance.now() - perfMs)/1000;
+}
+
+/* ============================== audio ============================== */
+function click(at, accent){
+  const o=ctx.createOscillator(), g=ctx.createGain();
+  o.frequency.value = accent ? 1100 : 780;
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.exponentialRampToValueAtTime(accent?0.5:0.32, at+0.001);
+  g.gain.exponentialRampToValueAtTime(0.0001, at+0.045);
+  o.connect(g).connect(ctx.destination);
+  o.start(at); o.stop(at+0.06);
+}
+
+function schedule(){
+  const horizon = ctx.currentTime + LOOKAHEAD;
+  const on=cfg.pattern.on, len=on.length, bars=cfg.pattern.beats, b=beatDur();
+
+  while (startTime + (Math.floor(nextOnset/len)*bars +
+         on[nextOnset%len].p + (on[nextOnset%len].o||0))*b < horizon){
+    const k=nextOnset%len, o=on[k];
+    const t = startTime + (Math.floor(nextOnset/len)*bars + o.p + (o.o||0))*b;
+    targets.push({t, voice:(o.v!=null?o.v:k)%cfg.pads, claimed:false, done:false});
+    if (cfg.click==="pattern" && t>=clickFrom) click(t, k===0);
+    nextOnset++;
+  }
+
+  while (startTime + nextBeat*b < horizon){
+    const t = startTime + nextBeat*b, down = nextBeat % bars === 0;
+    if (t >= clickFrom - 1e-9){
+      if (cfg.click==="quarters") click(t, down);
+      else if (cfg.click==="downbeat" && down) click(t, true);
+    } else click(t, down);           // count-in is always audible
+    nextBeat++;
+  }
+
+  const cutoff = ctx.currentTime - HISTORY - 1;
+  if (targets.length > 400) targets = targets.filter(x => x.t > cutoff);
+}
+
+/* ============================== taps ============================== */
+function tap(voice, perfMs){
+  const lag = performance.now() - perfMs;   // the diagnostic figure
+  flash(voice);
+  if (!running) return;
+
+  const t=toCtx(perfMs), w=captureWindow(), lat=latency();
+  let best=null, bestD=Infinity, anyWrong=false;
+
+  for (const g of targets){
+    const d = t - (g.t + lat);
+    if (Math.abs(d) > w) continue;
+    if (g.voice !== voice){ anyWrong=true; continue; }
+    if (g.claimed) continue;
+    if (Math.abs(d) < Math.abs(bestD)){ best=g; bestD=d; }
+  }
+
+  if (!best){
+    extra++;
+    taps.push({t, dev:null, voice, lag, kind: anyWrong?"wrong":"extra"});
+    paint(voice, "var(--miss)");
+  } else {
+    best.claimed=true; best.done=true;
+    const dev = bestD*1000;
+    taps.push({t, dev, voice, lag, kind:"hit"});
+    paint(voice, dev < -4 ? "var(--rush)" : dev > 4 ? "var(--drag)" : "var(--true)");
+  }
+  if (taps.length > 600) taps = taps.slice(-400);
+  stats();
+}
+
+function flash(v){
+  const el=padEls[v]; if(!el) return;
+  el.classList.add("lit");
+  clearTimeout(el._t1);
+  el._t1 = setTimeout(()=>el.classList.remove("lit"), 70);
+}
+function paint(v, colour){
+  const el=padEls[v]; if(!el) return;
+  el.style.color = colour; el.classList.add("fresh");
+  clearTimeout(el._t2);
+  el._t2 = setTimeout(()=>{ el.classList.remove("fresh"); el.style.color=""; }, 240);
+}
+
+/* ============================== readout ============================== */
+const $ = id => document.getElementById(id);
+const ms = n => (n>0?"+":n<0?"−":"") + Math.abs(n).toFixed(0);
+
+function stats(){
+  const hits = taps.filter(x=>x.kind==="hit");
+  const last = taps[taps.length-1];
+  const lb = $("mLast").querySelector("b");
+  if (!last){ lb.textContent="—"; lb.style.color=""; }
+  else if (last.kind!=="hit"){ lb.textContent="✕"; lb.style.color="var(--miss)"; }
+  else {
+    lb.textContent = ms(last.dev);
+    lb.style.color = last.dev<-4 ? "var(--rush)" : last.dev>4 ? "var(--drag)" : "var(--true)";
+  }
+  if (hits.length){
+    const m = hits.reduce((a,x)=>a+x.dev,0)/hits.length;
+    const sd = Math.sqrt(hits.reduce((a,x)=>a+(x.dev-m)**2,0)/hits.length);
+    $("mMean").textContent = ms(m);
+    $("mMean").style.color = Math.abs(m)<5 ? "var(--true)" : m<0 ? "var(--rush)" : "var(--drag)";
+    $("mSd").textContent = sd.toFixed(0);
+  } else {
+    $("mMean").textContent="—"; $("mMean").style.color=""; $("mSd").textContent="—";
+  }
+  $("mN").textContent = hits.length;
+  $("mErr").innerHTML = missed + '<span class="sl"> / </span>' + extra;
+
+  const recent = taps.slice(-40);
+  if (recent.length){
+    const mean = recent.reduce((a,x)=>a+x.lag,0)/recent.length;
+    const max  = Math.max(...recent.map(x=>x.lag));
+    $("dLag").textContent = mean.toFixed(1) + " ms mean, " + max.toFixed(1) + " ms worst";
+  }
+}
+
+/* ============================== canvas ============================== */
+const cv=$("cv"), g2=cv.getContext("2d");
+let W=0, H=0, RANGE=60, lastFrame=0, jank=0, jankDecay=0;
+
+function resize(){
+  const r=cv.getBoundingClientRect(), d=Math.min(devicePixelRatio||1, 2.5);
+  cv.width=Math.round(r.width*d); cv.height=Math.round(r.height*d);
+  g2.setTransform(d,0,0,d,0,0); W=r.width; H=r.height;
+}
+addEventListener("resize", resize);
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+function draw(ts){
+  requestAnimationFrame(draw);
+
+  if (lastFrame){
+    const gap = ts - lastFrame;
+    if (gap > jank) jank = gap;
+    if (++jankDecay > 120){ jank = gap; jankDecay = 0; }
+    $("dJank").textContent = jank.toFixed(0) + " ms";
+  }
+  lastFrame = ts;
+
+  if (!W) return;
+  const now = ctx ? ctx.currentTime : 0;
+  const pad=16, cy=H/2, half=H/2-pad;
+  const hist=86, sx=0, sw=W-hist-10;
+  const y = d => cy - Math.max(-1.6, Math.min(1.6, d/RANGE))*half;
+
+  const hits = taps.filter(x=>x.kind==="hit");
+  if (hits.length > 8){
+    const peak = Math.max(...hits.slice(-60).map(x=>Math.abs(x.dev)));
+    const want = peak>100 ? 200 : peak>50 ? 100 : 60;
+    RANGE += (want - RANGE)*0.06;
+  }
+
+  g2.clearRect(0,0,W,H);
+
+  if (running){
+    const w=captureWindow(), lat=latency();
+    for (const t of targets)
+      if (!t.done && t.t+lat+w < now-0.02 && t.t >= clickFrom-1e-9){ t.done=true; missed++; stats(); }
+  }
+
+  g2.font = "9px " + css("--fig");
+  g2.textBaseline = "middle";
+  for (const v of [-RANGE, -RANGE/2, RANGE/2, RANGE]){
+    const yy=y(v);
+    g2.strokeStyle="rgba(138,155,175,.13)"; g2.lineWidth=1;
+    g2.beginPath(); g2.moveTo(sx,yy+.5); g2.lineTo(W,yy+.5); g2.stroke();
+    g2.fillStyle="rgba(138,155,175,.55)"; g2.textAlign="right";
+    g2.fillText(Math.round(Math.abs(v))+"ms", W-4, yy-6);
+  }
+
+  if (running){
+    const lat=latency();
+    g2.strokeStyle="rgba(138,155,175,.16)";
+    for (const t of targets){
+      const age = now - (t.t+lat);
+      if (age<0 || age>HISTORY) continue;
+      const x = sx + sw - (age/HISTORY)*sw;
+      g2.beginPath(); g2.moveTo(x+.5, pad*0.5); g2.lineTo(x+.5, H-pad*0.5); g2.stroke();
+    }
+  }
+
+  g2.strokeStyle=css("--true"); g2.globalAlpha=.55; g2.lineWidth=1.5;
+  g2.beginPath(); g2.moveTo(0,cy+.5); g2.lineTo(W,cy+.5); g2.stroke();
+  g2.globalAlpha=1;
+
+  for (const t of taps){
+    const age = now - t.t;
+    if (age<0 || age>HISTORY) continue;
+    const x = sx + sw - (age/HISTORY)*sw;
+    g2.globalAlpha = Math.max(.25, 1 - age/HISTORY*0.8);
+    if (t.kind!=="hit"){
+      g2.strokeStyle=css("--miss"); g2.lineWidth=1.5;
+      g2.beginPath();
+      g2.moveTo(x-4,cy-4); g2.lineTo(x+4,cy+4);
+      g2.moveTo(x+4,cy-4); g2.lineTo(x-4,cy+4);
+      g2.stroke();
+    } else {
+      const yy=y(t.dev);
+      g2.fillStyle = t.dev<-4 ? css("--rush") : t.dev>4 ? css("--drag") : css("--true");
+      g2.beginPath(); g2.arc(x, yy, age<0.25?6:3.4, 0, 6.284); g2.fill();
+    }
+    g2.globalAlpha=1;
+  }
+
+  g2.strokeStyle=css("--rule");
+  g2.beginPath(); g2.moveTo(W-hist-5.5, pad*0.4); g2.lineTo(W-hist-5.5, H-pad*0.4); g2.stroke();
+
+  if (hits.length > 1){
+    const bins=26, lo=-RANGE*1.2, hi=RANGE*1.2, b=new Array(bins).fill(0);
+    for (const t of hits){
+      const i = Math.floor((t.dev-lo)/(hi-lo)*bins);
+      if (i>=0 && i<bins) b[i]++;
+    }
+    const peak=Math.max(...b,1), bh=(H-pad*2)/bins;
+    for (let i=0;i<bins;i++){
+      if (!b[i]) continue;
+      const c = lo + (i+.5)/bins*(hi-lo);
+      const yy = y(c) - bh/2;
+      g2.fillStyle = c<-4 ? css("--rush") : c>4 ? css("--drag") : css("--true");
+      g2.globalAlpha=.78;
+      g2.fillRect(W-hist, yy+.6, (b[i]/peak)*(hist-6), Math.max(1.5,bh-1.2));
+      g2.globalAlpha=1;
+    }
+  }
+}
+requestAnimationFrame(draw);
+
+/* ============================== pads ============================== */
+function buildPads(){
+  const host=$("pads"); host.innerHTML=""; padEls=[];
+  for (let i=0;i<cfg.pads;i++){
+    const el=document.createElement("div");
+    el.className="pad"; el.textContent=i+1;
+    el.addEventListener("pointerdown", e => {
+      e.preventDefault();
+      if (!ctx) return;
+      tap(i, e.timeStamp);
+    }, {passive:false});
+    host.appendChild(el); padEls.push(el);
+  }
+}
+
+addEventListener("keydown", e => {
+  if (e.repeat) return;
+  if (e.code==="Space"){ e.preventDefault(); toggle(); return; }
+  const n = parseInt(e.key,10);
+  if (n>=1 && n<=cfg.pads && ctx){ e.preventDefault(); tap(n-1, e.timeStamp); }
+});
+
+/* ============================== transport ============================== */
+function toggle(){ running ? stop() : start(); }
+
+function start(){
+  if (!ctx) ctx = new (window.AudioContext||window.webkitAudioContext)({latencyHint:"interactive"});
+  if (ctx.state==="suspended") ctx.resume();
+
+  targets=[]; nextOnset=0; nextBeat=0;
+  const lead=0.25, inBeats=cfg.countIn*cfg.pattern.beats;
+  clickFrom = ctx.currentTime + lead;
+  startTime = clickFrom + inBeats*beatDur();
+  if (inBeats) nextBeat = -inBeats;
+
+  running=true;
+  $("run").textContent="Stop"; $("run").classList.add("on");
+  schedule();
+  schedTimer = setInterval(schedule, TICK);
+}
+
+function stop(){
+  running=false; clearInterval(schedTimer);
+  $("run").textContent="Start"; $("run").classList.remove("on");
+}
+
+function clearAll(){
+  taps=[]; missed=0; extra=0;
+  for (const t of targets){ t.claimed=false; t.done=false; }
+  stats();
+}
+
+/* ============================== controls ============================== */
+const ps=$("pattern");
+PATTERNS.forEach((p,i)=>ps.add(new Option(p.name,i)));
+ps.onchange = ()=>{ cfg.pattern=PATTERNS[+ps.value]; if(running){stop();start();} clearAll(); };
+
+const pc=$("padCount");
+for (let i=1;i<=8;i++) pc.add(new Option(i===1?"1 pad":i+" pads", i));
+pc.value=cfg.pads;
+pc.onchange = ()=>{ cfg.pads=+pc.value; buildPads(); if(running){stop();start();} clearAll(); };
+
+$("clickMode").onchange = e=>{ cfg.click=e.target.value; if(running){stop();start();} };
+$("countIn").onchange   = e=>{ cfg.countIn=+e.target.value; };
+$("bpm").oninput = e=>{
+  cfg.bpm=+e.target.value; $("bpmv").textContent=cfg.bpm;
+  if (running){ stop(); start(); clearAll(); }
+};
+$("off").oninput = e=>{ cfg.offset=+e.target.value; $("offv").textContent=cfg.offset+" ms"; };
+
+$("run").onclick = toggle;
+$("clear").onclick = clearAll;
+
+/* Deliberately stall the main thread, to test whether touch timestamps
+   survive it. Interval is prime-ish so it never locks to the beat. */
+$("stress").onchange = e => {
+  clearInterval(stressTimer);
+  if (e.target.checked){
+    stressTimer = setInterval(() => {
+      const end = performance.now() + 45;
+      while (performance.now() < end){ /* burn */ }
+    }, 137);
+  } else { jank = 0; }
+};
+
+buildPads(); resize(); stats();
+
+/* ============================== install ============================== */
+if ("serviceWorker" in navigator){
+  addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(()=>{});
+    let reloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (reloading) return;
+      const t = $("toast");
+      t.style.display = "block";
+      t.onclick = () => { reloading = true; location.reload(); };
+    });
+  });
+}
+</script>
+</body>
+</html>
