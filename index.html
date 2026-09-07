@@ -305,6 +305,7 @@
 
 <div id="toast">Updated — tap to reload</div>
 
+<script src="store.js"></script>
 <script>
 "use strict";
 
@@ -423,7 +424,7 @@ function schedule(){
          on[nextOnset%len].p + (on[nextOnset%len].o||0))*b < horizon){
     const k=nextOnset%len, o=on[k];
     const t = startTime + (Math.floor(nextOnset/len)*bars + o.p + (o.o||0))*b;
-    targets.push({t, voice:(o.v!=null?o.v:k)%cfg.pads, claimed:false, done:false});
+    targets.push({t, k, voice:(o.v!=null?o.v:k)%cfg.pads, claimed:false, done:false});
     nextOnset++;
   }
 
@@ -468,7 +469,7 @@ function tap(voice, perfMs){
   } else {
     best.claimed=true; best.done=true;
     const dev = bestD*1000;
-    taps.push({t, dev, voice, lag, kind:"hit"});
+    taps.push({t, dev, voice, lag, kind:"hit", k:best.k});
     paint(voice, dev < -4 ? "var(--rush)" : dev > 4 ? "var(--drag)" : "var(--true)");
   }
   if (taps.length > 600) taps = taps.slice(-400);
@@ -744,10 +745,51 @@ function start(){
 
 function stop(){
   running=false; clearInterval(schedTimer);
+  captureSession();
   $("run").classList.remove("on"); $("run").setAttribute("aria-label","Start");
 }
 
+/* A session is whatever was played since the last capture. Tracking a committed
+   count rather than a boolean means stop/start/clear can happen in any order
+   without either double-counting a run or silently dropping one. */
+let savedCount=0, savedMissed=0, savedExtra=0;
+const MIN_HITS = 8;
+
+function captureSession(){
+  const fresh = taps.slice(savedCount);
+  const hits  = fresh.filter(x => x.kind==="hit" && x.k!=null);
+  // Below the threshold, leave the marker alone so a few stray taps roll into
+  // the next capture instead of being thrown away.
+  if (hits.length < MIN_HITS) return;
+
+  const len = cfg.pattern.on.length;
+  const c = Array.from({length:len}, () => [0,0,0]);
+  let sum=0, sq=0;
+  for (const h of hits){
+    sum += h.dev; sq += h.dev*h.dev;
+    const cell = c[h.k];
+    if (cell){ cell[0]++; cell[1]+=h.dev; cell[2]+=h.dev*h.dev; }
+  }
+  const r1 = v => Math.round(v*10)/10;
+
+  Store.add({
+    t: Date.now(),
+    key: cfg.feel ? "feel:"+cfg.feel.id : cfg.meter.id+"|"+cfg.note.id,
+    label: cfg.feel ? cfg.feel.name : cfg.meter.id+" · "+cfg.note.name.toLowerCase(),
+    bpm: cfg.bpm, pads: cfg.pads,
+    n: hits.length, sum: r1(sum), sq: r1(sq),
+    missed: Math.max(0, missed - savedMissed),
+    extra:  fresh.filter(x => x.kind!=="hit").length,
+    pos: cfg.pattern.on.map(o => o.p),
+    c:   c.map(x => [x[0], r1(x[1]), r1(x[2])])
+  });
+
+  savedCount = taps.length; savedMissed = missed; savedExtra = extra;
+}
+
 function clearAll(){
+  captureSession();
+  savedCount=0; savedMissed=0; savedExtra=0;
   taps=[]; missed=0; extra=0;
   for (const t of targets){ t.claimed=false; t.done=false; }
   stats();
