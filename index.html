@@ -27,6 +27,12 @@
     --ui: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0}
+  /* The hidden attribute works through the UA stylesheet, and author rules beat
+     the UA sheet — so any `display` declaration on an element that also uses
+     hidden silently defeats it. #advBody sets display:grid and would never
+     collapse without this. Global rather than scoped, so the next element to
+     take a display rule can't quietly reintroduce the same bug. */
+  [hidden]{display:none!important}
   html,body{height:100%;overflow:hidden;overscroll-behavior:none}
   body{
     background:var(--ground); color:var(--ink); font-family:var(--ui);
@@ -37,13 +43,30 @@
     gap:10px;
   }
 
+  /* Deliberately small: standalone launch buys back roughly 100px of height
+     for the pads, and a tall header would hand it straight back. */
+  .topbar{display:flex;align-items:center;justify-content:center;gap:7px;flex:0 0 auto;padding:0 2px}
+  .topbar h1{font-size:14px;font-weight:600;color:var(--ink);letter-spacing:.005em}
+  .mark{width:20px;height:20px;flex:0 0 auto}
+  .mark line{stroke:var(--true);stroke-width:1.7;stroke-linecap:round}
+  .mark .e{fill:var(--rush)}
+  .mark .l{fill:var(--drag)}
+
   .transport{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   button{font-family:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--rule);
     border-radius:6px;padding:9px 14px;font-size:15px;cursor:pointer}
   button:active{background:var(--panel-hi)}
   button:focus-visible{outline:2px solid var(--true);outline-offset:2px}
-  #run{min-width:104px;font-weight:600;font-variant-numeric:tabular-nums}
+  /* Icon buttons are square so swapping play for stop can't reflow the row,
+     and 46px keeps them a comfortable touch target on glass. */
+  .iconbtn{display:flex;align-items:center;justify-content:center;
+    width:46px;height:46px;padding:0;flex:0 0 auto}
+  .iconbtn svg{width:22px;height:22px;fill:currentColor;display:block}
   #run.on{background:var(--true);border-color:var(--true);color:#122018}
+  #run .i-stop{display:none}
+  #run.on .i-play{display:none}
+  #run.on .i-stop{display:block}
+  #gear.on{background:var(--panel-hi);border-color:var(--ink-dim)}
   .tempo{display:flex;align-items:center;gap:9px;flex:1;min-width:210px}
   .tempo input[type=range]{flex:1;accent-color:var(--drag);min-width:80px}
   .bpm{font-family:var(--fig);font-size:23px;font-variant-numeric:tabular-nums;min-width:3.2ch;text-align:right}
@@ -51,10 +74,20 @@
 
   .display{flex:0 0 auto;position:relative;background:var(--panel);border:1px solid var(--rule);
     border-radius:8px;overflow:hidden}
-  canvas{display:block;width:100%;height:210px}
+  #cv{display:block;width:100%;height:clamp(130px,24vh,210px)}
   .axis{position:absolute;left:9px;font-family:var(--fig);font-size:10px;pointer-events:none}
   .axis.hi{top:7px;color:var(--rush)}
   .axis.lo{bottom:7px;color:var(--drag)}
+
+  /* Drift meter: the same deviations as the scrolling display, collapsed onto a
+     single horizontal axis. Dead centre is on the beat, dragging left, rushing
+     right, so the last few taps read as one cluster. */
+  .drift{flex:0 0 auto;position:relative;background:var(--panel);
+    border:1px solid var(--rule);border-radius:8px;overflow:hidden}
+  #dv{display:block;width:100%;height:62px}
+  .dlab{position:absolute;top:6px;font-family:var(--fig);font-size:10px;pointer-events:none}
+  .dlab.l{left:9px;color:var(--drag)}
+  .dlab.r{right:9px;color:var(--rush)}
 
   .readout{display:flex;gap:8px;align-items:stretch}
   .stat{flex:1;background:var(--panel);border:1px solid var(--rule);border-radius:8px;
@@ -73,19 +106,67 @@
   .pad.lit{background:var(--panel-hi)}
   .pad.fresh{border-color:currentColor}
 
-  details{background:var(--panel);border:1px solid var(--rule);border-radius:8px;flex:0 0 auto}
-  summary{padding:9px 12px;font-size:14px;color:var(--ink-dim);cursor:pointer;list-style:none}
-  summary::-webkit-details-marker{display:none}
-  summary::before{content:"Settings  ▸"}
-  details[open] summary::before{content:"Settings  ▾"}
-  details[open]{max-height:46vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
-  .fields{padding:2px 12px 13px;display:grid;gap:11px}
+  /* Floats over the displays rather than sitting in the flow. Opening it used
+     to push the pads down mid-drill, which moves the target out from under the
+     hand that is already on its way to it. */
+  .settings{position:fixed;z-index:20;left:50%;transform:translateX(-50%);
+    width:calc(100% - 20px);max-width:640px;
+    background:var(--panel);border:1px solid var(--rule);border-radius:8px;
+    box-shadow:0 14px 30px rgba(0,0,0,.5);
+    overflow-y:auto;-webkit-overflow-scrolling:touch}
+  #scrim{position:fixed;inset:0;z-index:19;background:rgba(11,15,20,.5)}
+  /* Sections rather than a flat stack of labels: a hairline plus a small-caps
+     heading separates the groups in less vertical space than gaps alone, which
+     matters when the panel floats over the pads. */
+  .sect{display:grid;gap:7px;padding:11px 12px}
+  .sect + .sect{border-top:1px solid var(--rule)}
+  .sect h2{display:flex;align-items:baseline;gap:7px;font-size:10px;font-weight:600;
+    letter-spacing:.09em;text-transform:uppercase;color:var(--ink-dim)}
+  .hint{font-family:var(--fig);font-size:10px;font-weight:400;letter-spacing:0;
+    text-transform:none;color:var(--ink-dim);opacity:.7}
+  .two{display:flex;flex-wrap:wrap;gap:12px 22px}
+  .two>div{display:grid;gap:7px;align-content:start}
+
+  /* Calibration and the diagnostic are set-once-and-forget, so they fold away
+     and leave the panel showing only what changes between drills. */
+  .advbtn{display:flex;align-items:center;justify-content:flex-start;gap:7px;width:100%;
+    padding:0;background:none;border:none;font-family:inherit;font-size:10px;
+    font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-dim)}
+  .advbtn .chev{width:8px;height:8px;fill:currentColor;transition:transform .13s ease}
+  .advbtn[aria-expanded="true"]{color:var(--ink)}
+  .advbtn[aria-expanded="true"] .chev{transform:rotate(90deg)}
+  #advBody{display:grid;gap:11px;padding-top:9px}
   label{display:grid;gap:5px;font-size:13px;color:var(--ink-dim)}
   .check{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-dim)}
   .check input{width:19px;height:19px;accent-color:var(--miss);flex:0 0 auto}
   select,input[type=range]{font-family:inherit;font-size:15px;color:var(--ink);
     background:var(--panel-hi);border:1px solid var(--rule);border-radius:6px;padding:7px;width:100%}
   input[type=range]{padding:0;accent-color:var(--drag);background:none;border:none}
+  .pick{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{padding:7px 11px;font-size:13px;border-radius:6px;background:var(--panel-hi);
+    border:1px solid var(--rule);color:var(--ink);line-height:1}
+  .chip.fig{font-family:var(--fig)}
+  .chip.sm{font-size:12px;padding:6px 9px;color:var(--ink-dim)}
+  .chip.glyph{padding:4px 8px;min-width:46px;display:flex;align-items:center;justify-content:center}
+  .chip.glyph svg{height:24px;width:auto;fill:currentColor;display:block}
+  .chip.sel{background:var(--true);border-color:var(--true);color:#122018}
+  .chip:disabled{opacity:.3}
+
+  /* One cell per subdivision. Beat cells carry the count and a brighter edge, so
+     the bar stays readable at sixteenths in 7/8 where there are 28 of them. */
+  .grid{display:flex;flex-wrap:wrap;gap:4px;padding-top:2px}
+  .cell{position:relative;width:26px;height:32px;padding:0;border-radius:5px;
+    background:transparent;border:1px solid var(--rule)}
+  .cell.beat{border-color:var(--ink-dim)}
+  .cell.s1{background:var(--ink-dim);border-color:var(--ink-dim)}
+  .cell.s2{background:var(--true);border-color:var(--true)}
+  /* No transition on the playhead. Easing it would smear the moment the click
+     actually fell across a few frames, and that moment is the whole subject. */
+  .cell.now{box-shadow:0 0 0 2px var(--ink),0 0 12px rgba(230,236,243,.22)}
+  .cell.beat::after{content:attr(data-n);position:absolute;top:1px;left:0;right:0;
+    font-size:9px;font-family:var(--fig);color:var(--ink-dim)}
+  .cell.s1.beat::after,.cell.s2.beat::after{color:#122018}
+
   .row{display:flex;gap:10px}
   .row>*{flex:1;min-width:0}
   .val{font-family:var(--fig);color:var(--ink);font-variant-numeric:tabular-nums}
@@ -103,20 +184,16 @@
 </head>
 <body>
 
-<div class="transport">
-  <button id="run">Start</button>
-  <div class="tempo">
-    <input id="bpm" type="range" min="30" max="220" value="84" step="1" aria-label="Tempo">
-    <div class="bpm"><span id="bpmv">84</span><span>bpm</span></div>
-  </div>
-  <button id="clear">Clear</button>
-</div>
-
-<div class="display">
-  <canvas id="cv"></canvas>
-  <div class="axis hi">rushing</div>
-  <div class="axis lo">dragging</div>
-</div>
+<header class="topbar">
+  <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+    <line x1="3.8" y1="12" x2="20.2" y2="12"/>
+    <circle class="e" cx="7.2"  cy="7.8"  r="1.7"/>
+    <circle class="e" cx="11.3" cy="10.0" r="1.7"/>
+    <circle class="l" cx="15.4" cy="14.5" r="1.7"/>
+    <circle class="l" cx="19.0" cy="16.7" r="1.7"/>
+  </svg>
+  <h1>millitap</h1>
+</header>
 
 <div class="readout">
   <div class="stat" id="mLast"><b>—</b><i>last tap</i></div>
@@ -126,33 +203,61 @@
   <div class="stat"><b id="mErr">0<span class="sl"> / </span>0</b><i>missed / extra</i></div>
 </div>
 
-<div class="pads" id="pads"></div>
+<div class="transport">
+  <button id="run" class="iconbtn" aria-label="Start">
+    <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+    <svg class="i-stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+  </button>
+  <div class="tempo">
+    <input id="bpm" type="range" min="30" max="220" value="84" step="1" aria-label="Tempo">
+    <div class="bpm"><span id="bpmv">84</span><span>bpm</span></div>
+  </div>
+  <button id="clear">Clear</button>
+  <button id="gear" class="iconbtn" aria-label="Settings" aria-expanded="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a7.07 7.07 0 0 0 .06-.94 7.07 7.07 0 0 0-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.12.22.38.3.6.22l2.39-.96c.49.38 1.03.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.48 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
+  </button>
+</div>
 
-<details>
-  <summary></summary>
-  <div class="fields">
-    <div class="row">
-      <label>Rhythm<select id="pattern"></select></label>
-      <label>Pads<select id="padCount"></select></label>
-    </div>
-    <div class="row">
-      <label>Click plays
-        <select id="clickMode">
-          <option value="pattern">the whole rhythm</option>
-          <option value="quarters" selected>quarter notes only</option>
-          <option value="downbeat">downbeats only</option>
-          <option value="none">nothing (silent)</option>
-        </select>
-      </label>
-      <label>Count-in
-        <select id="countIn">
-          <option value="0">off</option>
-          <option value="1" selected>one bar</option>
-          <option value="2">two bars</option>
-        </select>
-      </label>
-    </div>
+<div id="scrim" hidden></div>
 
+<div id="settings" class="settings" hidden>
+  <div class="sect">
+    <h2>Meter</h2>
+    <div class="pick" id="meterPick"></div>
+  </div>
+
+  <div class="sect">
+    <h2>Note value</h2>
+    <div class="pick" id="notePick"></div>
+  </div>
+
+  <div class="sect">
+    <h2>Feel <span class="hint" id="feelHint"></span></h2>
+    <div class="pick" id="feelPick"></div>
+  </div>
+
+  <div class="sect">
+    <h2>Click <span class="hint">off → on → accent</span></h2>
+    <div class="grid" id="clickGrid"></div>
+  </div>
+
+  <div class="sect two">
+    <div>
+      <h2>Pads</h2>
+      <div class="pick" id="padPick"></div>
+    </div>
+    <div>
+      <h2>Count-in <span class="hint">bars</span></h2>
+      <div class="pick" id="countPick"></div>
+    </div>
+  </div>
+
+  <div class="sect">
+    <button type="button" id="advToggle" class="advbtn" aria-expanded="false">
+      <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7z"/></svg>
+      Advanced
+    </button>
+    <div id="advBody" hidden>
     <label>Audio offset <span class="val" id="offv">0 ms</span>
       <input id="off" type="range" min="-40" max="220" value="0" step="1">
     </label>
@@ -180,8 +285,23 @@
       climb into the tens of milliseconds. <b>If lag climbs but your spread doesn't, the timestamps
       are hardware-derived</b> and page stalls can't corrupt your readings. If spread climbs with
       it, the web version has a ceiling and native is the fix.</p>
+    </div>
   </div>
-</details>
+</div>
+
+<div class="display">
+  <canvas id="cv"></canvas>
+  <div class="axis hi">rushing</div>
+  <div class="axis lo">dragging</div>
+</div>
+
+<div class="drift">
+  <canvas id="dv"></canvas>
+  <div class="dlab l">dragging</div>
+  <div class="dlab r">rushing</div>
+</div>
+
+<div class="pads" id="pads"></div>
 
 <div id="toast">Updated — tap to reload</div>
 
@@ -195,28 +315,69 @@
 const seq = (n, step, o) =>
   Array.from({length:n}, (_,i) => ({p:i*step, o:(o && i%2 ? o : 0)}));
 
-const PATTERNS = [
-  {id:"q",     name:"Quarter notes",            beats:4, on:seq(4,1)},
-  {id:"e",     name:"Eighth notes",             beats:4, on:seq(8,0.5)},
-  {id:"s",     name:"Sixteenth notes",          beats:4, on:seq(16,0.25)},
-  {id:"t",     name:"Eighth-note triplets",     beats:4, on:seq(12,1/3)},
-  {id:"sw67",  name:"Swung eighths — triplet",  beats:4, on:seq(8,0.5, 1/6)},
-  {id:"sw58",  name:"Swung eighths — light",    beats:4, on:seq(8,0.5, 0.085)},
-  {id:"off",   name:"Offbeat eighths only",     beats:4, on:[{p:0.5},{p:1.5},{p:2.5},{p:3.5}]},
-  {id:"bb",    name:"Backbeats — dead centre",  beats:4, on:[{p:1},{p:3}]},
-  {id:"bblb",  name:"Backbeats — laid back",    beats:4, on:[{p:1,o:0.05},{p:3,o:0.05}]},
-  {id:"bbpu",  name:"Backbeats — pushed",       beats:4, on:[{p:1,o:-0.04},{p:3,o:-0.04}]},
-  {id:"clave", name:"Son clave 3–2",            beats:8, on:[{p:0},{p:1.5},{p:3},{p:5},{p:6}]},
+/* Meter is a bar length counted in beat units, and bpm always sets the rate of
+   that unit — so 6/8 is six clicks to the bar rather than two dotted-quarter
+   pulses. Less musically nuanced, but unambiguous, which is what matters when
+   the whole exercise is measuring against the click. */
+const METERS = [
+  {id:"4/4", beats:4},
+  {id:"3/4", beats:3},
+  {id:"6/8", beats:6},
+  {id:"5/4", beats:5},
+  {id:"7/8", beats:7},
+];
+
+/* Note values are generated against whichever meter is selected; sub is how many
+   onsets fit in a beat. */
+const NOTES = [
+  {id:"q", name:"Quarter notes",        sub:1},
+  {id:"e", name:"Eighth notes",         sub:2},
+  {id:"t", name:"Eighth-note triplets", sub:3},
+  {id:"s", name:"Sixteenth notes",      sub:4},
+];
+
+/* Feels carry microtiming or a fixed shape that only makes sense at a set bar
+   length, so each defines its own and overrides the meter while selected. */
+const FEELS = [
+  {id:"sw67",  name:"Swung — triplet",   beats:4, on:seq(8,0.5, 1/6)},
+  {id:"sw58",  name:"Swung — light",     beats:4, on:seq(8,0.5, 0.085)},
+  {id:"off",   name:"Offbeat eighths",   beats:4, on:[{p:0.5},{p:1.5},{p:2.5},{p:3.5}]},
+  {id:"bb",    name:"Backbeats",         beats:4, on:[{p:1},{p:3}]},
+  {id:"bblb",  name:"Backbeats — laid back", beats:4, on:[{p:1,o:0.05},{p:3,o:0.05}]},
+  {id:"bbpu",  name:"Backbeats — pushed",    beats:4, on:[{p:1,o:-0.04},{p:3,o:-0.04}]},
+  {id:"clave", name:"Son clave 3–2",     beats:8, on:[{p:0},{p:1.5},{p:3},{p:5},{p:6}]},
 ];
 
 /* ============================== state ============================== */
 let ctx=null, running=false, startTime=0, clickFrom=0;
-let nextOnset=0, nextBeat=0, targets=[], taps=[], missed=0, extra=0;
+let nextOnset=0, nextCell=0, targets=[], taps=[], missed=0, extra=0;
 let padEls=[], schedTimer=null, stressTimer=null;
 
-const cfg = { bpm:84, pattern:PATTERNS[0], pads:2, click:"quarters", countIn:1, offset:0 };
+/* click is one state per grid cell: 0 off, 1 on, 2 accent. */
+const cfg = { bpm:84, meter:METERS[0], note:NOTES[0], feel:null,
+              pattern:null, click:[], pads:2, countIn:1, offset:0 };
 const LOOKAHEAD=0.18, TICK=25, HISTORY=10;
 const beatDur = () => 60/cfg.bpm;
+
+/* One grid cell per subdivision of the current pattern. A feel's onsets are
+   uneven, so it gets a plain eighth-note grid for its clicks to sit on. */
+const gridSub = () => cfg.feel ? 2 : cfg.note.sub;
+
+function buildPattern(){
+  cfg.pattern = cfg.feel
+    ? {beats: cfg.feel.beats, on: cfg.feel.on}
+    : {beats: cfg.meter.beats,
+       on: seq(cfg.meter.beats*cfg.note.sub, 1/cfg.note.sub)};
+}
+
+/* Beats on, downbeat accented, subdivisions off — what "quarter notes only"
+   used to mean, now just one reachable state of the grid among many. */
+function defaultClick(){
+  const sub=gridSub(), n=cfg.pattern.beats*sub;
+  cfg.click = Array.from({length:n}, (_,i) => i%sub ? 0 : (i ? 1 : 2));
+}
+
+buildPattern(); defaultClick();
 
 function captureWindow(){
   const on=cfg.pattern.on, b=beatDur();
@@ -263,17 +424,20 @@ function schedule(){
     const k=nextOnset%len, o=on[k];
     const t = startTime + (Math.floor(nextOnset/len)*bars + o.p + (o.o||0))*b;
     targets.push({t, voice:(o.v!=null?o.v:k)%cfg.pads, claimed:false, done:false});
-    if (cfg.click==="pattern" && t>=clickFrom) click(t, k===0);
     nextOnset++;
   }
 
-  while (startTime + nextBeat*b < horizon){
-    const t = startTime + nextBeat*b, down = nextBeat % bars === 0;
+  /* One pass per grid cell rather than per beat, so an accent can land on any
+     subdivision. Read live from cfg.click, so editing the grid mid-drill takes
+     effect as soon as the lookahead window rolls past. */
+  const sub=gridSub(), cells=cfg.click.length, step=b/sub;
+  while (startTime + nextCell*step < horizon){
+    const t = startTime + nextCell*step;
+    const i = ((nextCell % cells) + cells) % cells;   // count-in runs negative
     if (t >= clickFrom - 1e-9){
-      if (cfg.click==="quarters") click(t, down);
-      else if (cfg.click==="downbeat" && down) click(t, true);
-    } else click(t, down);           // count-in is always audible
-    nextBeat++;
+      if (cfg.click[i]) click(t, cfg.click[i]===2);
+    } else if (i % sub === 0) click(t, i===0);        // count-in is always audible
+    nextCell++;
   }
 
   const cutoff = ctx.currentTime - HISTORY - 1;
@@ -360,12 +524,22 @@ function stats(){
 
 /* ============================== canvas ============================== */
 const cv=$("cv"), g2=cv.getContext("2d");
+const dv=$("dv"), g3=dv.getContext("2d");
 let W=0, H=0, RANGE=60, lastFrame=0, jank=0, jankDecay=0;
+let DW=0, DH=0;
+
+/* Size the backing store in device pixels and scale the context to match, so
+   dots stay crisp on retina instead of being upscaled by the compositor. */
+function fit(c, g){
+  const r=c.getBoundingClientRect(), d=Math.min(devicePixelRatio||1, 2.5);
+  c.width=Math.round(r.width*d); c.height=Math.round(r.height*d);
+  g.setTransform(d,0,0,d,0,0);
+  return r;
+}
 
 function resize(){
-  const r=cv.getBoundingClientRect(), d=Math.min(devicePixelRatio||1, 2.5);
-  cv.width=Math.round(r.width*d); cv.height=Math.round(r.height*d);
-  g2.setTransform(d,0,0,d,0,0); W=r.width; H=r.height;
+  const r=fit(cv,g2); W=r.width; H=r.height;
+  const q=fit(dv,g3); DW=q.width; DH=q.height;
 }
 addEventListener("resize", resize);
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
@@ -381,11 +555,16 @@ function draw(ts){
   }
   lastFrame = ts;
 
+  playhead();
+
   if (!W) return;
   const now = ctx ? ctx.currentTime : 0;
   const pad=16, cy=H/2, half=H/2-pad;
   const hist=86, sx=0, sw=W-hist-10;
-  const y = d => cy - Math.max(-1.6, Math.min(1.6, d/RANGE))*half;
+  /* Negative dev is early. Adding it moves the dot up the canvas, putting
+     rushing above the centre line and dragging below, which is what the axis
+     labels and the README have always claimed. */
+  const y = d => cy + Math.max(-1.6, Math.min(1.6, d/RANGE))*half;
 
   const hits = taps.filter(x=>x.kind==="hit");
   if (hits.length > 8){
@@ -466,7 +645,59 @@ function draw(ts){
       g2.globalAlpha=1;
     }
   }
+
+  drawDrift();
 }
+
+/* ============================== drift meter ==============================
+   The same deviations on one horizontal axis: centre is on the beat, dragging
+   (late, positive dev) runs left and rushing (early, negative dev) runs right.
+   Only the last few hits are drawn, each fading as newer taps push it down the
+   queue, so this shows the spread you are holding right now — accumulating the
+   whole session is the histogram's job. */
+/* Dots age on the audio clock rather than on arrival, so one keeps fading while
+   you hesitate instead of freezing until the next tap lands. Squaring the
+   remaining life drops the tail away quickly, leaving only what you just played. */
+const DRIFT_LIFE = 1.6;   // seconds until a dot is gone entirely
+const DRIFT_MAX  = 5;     // cap, so sixteenths at a fast tempo can't crowd the axis
+
+function drawDrift(){
+  if (!DW) return;
+  g3.clearRect(0,0,DW,DH);
+
+  const cx=DW/2, half=DW/2-16, dotY=DH*0.38;
+  const x = d => cx - Math.max(-1.35, Math.min(1.35, d/RANGE))*half;
+
+  g3.font = "9px " + css("--fig");
+  g3.textAlign = "center";
+  g3.textBaseline = "middle";
+
+  for (const v of [-RANGE, -RANGE/2, RANGE/2, RANGE]){
+    const xx = x(v);
+    g3.strokeStyle="rgba(138,155,175,.13)"; g3.lineWidth=1;
+    g3.beginPath(); g3.moveTo(xx+.5, DH*0.60); g3.lineTo(xx+.5, DH*0.76); g3.stroke();
+    g3.fillStyle="rgba(138,155,175,.5)";
+    g3.fillText(Math.round(Math.abs(v)), xx, DH*0.88);
+  }
+
+  g3.strokeStyle=css("--true"); g3.globalAlpha=.55; g3.lineWidth=1.5;
+  g3.beginPath(); g3.moveTo(cx+.5, 4); g3.lineTo(cx+.5, DH-4); g3.stroke();
+  g3.globalAlpha=1;
+
+  const now = ctx ? ctx.currentTime : 0;
+  const recent = taps
+    .filter(t => t.kind==="hit" && now - t.t < DRIFT_LIFE)
+    .slice(-DRIFT_MAX);
+
+  for (const t of recent){
+    const k = Math.max(0, 1 - (now - t.t)/DRIFT_LIFE);   // 1 fresh, 0 expired
+    g3.globalAlpha = k*k;
+    g3.fillStyle = t.dev<-4 ? css("--rush") : t.dev>4 ? css("--drag") : css("--true");
+    g3.beginPath(); g3.arc(x(t.dev), dotY, 4 + 3*k, 0, 6.284); g3.fill();
+  }
+  g3.globalAlpha=1;
+}
+
 requestAnimationFrame(draw);
 
 /* ============================== pads ============================== */
@@ -486,6 +717,7 @@ function buildPads(){
 
 addEventListener("keydown", e => {
   if (e.repeat) return;
+  if (e.key==="Escape"){ setSettings(false); return; }
   if (e.code==="Space"){ e.preventDefault(); toggle(); return; }
   const n = parseInt(e.key,10);
   if (n>=1 && n<=cfg.pads && ctx){ e.preventDefault(); tap(n-1, e.timeStamp); }
@@ -498,21 +730,21 @@ function start(){
   if (!ctx) ctx = new (window.AudioContext||window.webkitAudioContext)({latencyHint:"interactive"});
   if (ctx.state==="suspended") ctx.resume();
 
-  targets=[]; nextOnset=0; nextBeat=0;
+  targets=[]; nextOnset=0; nextCell=0;
   const lead=0.25, inBeats=cfg.countIn*cfg.pattern.beats;
   clickFrom = ctx.currentTime + lead;
   startTime = clickFrom + inBeats*beatDur();
-  if (inBeats) nextBeat = -inBeats;
+  if (inBeats) nextCell = -inBeats*gridSub();
 
   running=true;
-  $("run").textContent="Stop"; $("run").classList.add("on");
+  $("run").classList.add("on"); $("run").setAttribute("aria-label","Stop");
   schedule();
   schedTimer = setInterval(schedule, TICK);
 }
 
 function stop(){
   running=false; clearInterval(schedTimer);
-  $("run").textContent="Start"; $("run").classList.remove("on");
+  $("run").classList.remove("on"); $("run").setAttribute("aria-label","Start");
 }
 
 function clearAll(){
@@ -522,17 +754,141 @@ function clearAll(){
 }
 
 /* ============================== controls ============================== */
-const ps=$("pattern");
-PATTERNS.forEach((p,i)=>ps.add(new Option(p.name,i)));
-ps.onchange = ()=>{ cfg.pattern=PATTERNS[+ps.value]; if(running){stop();start();} clearAll(); };
+/* Note glyphs are drawn rather than typed: the Unicode music symbols render
+   inconsistently across iOS fonts, and the sixteenth has no reliable glyph. */
+const STEM = '<rect x="15.6" y="4" width="1.6" height="14"/>';
+const HEAD = '<ellipse cx="12" cy="18" rx="4.6" ry="3.4" transform="rotate(-22 12 18)"/>';
+const FLAG = y => '<path d="M17.2 '+y+'c4 1.6 5.9 4 5 7.2 2.2-3.7.6-6.6-5-8.9z"/>';
+const svg  = inner => '<svg viewBox="0 0 30 24" aria-hidden="true">'+inner+'</svg>';
 
-const pc=$("padCount");
-for (let i=1;i<=8;i++) pc.add(new Option(i===1?"1 pad":i+" pads", i));
-pc.value=cfg.pads;
-pc.onchange = ()=>{ cfg.pads=+pc.value; buildPads(); if(running){stop();start();} clearAll(); };
+const NOTE_SVG = {
+  q: svg(HEAD+STEM),
+  e: svg(HEAD+STEM+FLAG(4.3)),
+  s: svg(HEAD+STEM+FLAG(4.3)+FLAG(9.2)),
+  t: svg(
+    '<ellipse cx="5.5" cy="19" rx="3.5" ry="2.6" transform="rotate(-22 5.5 19)"/>'+
+    '<ellipse cx="14" cy="19" rx="3.5" ry="2.6" transform="rotate(-22 14 19)"/>'+
+    '<ellipse cx="22.5" cy="19" rx="3.5" ry="2.6" transform="rotate(-22 22.5 19)"/>'+
+    '<rect x="8.2" y="10" width="1.4" height="9"/>'+
+    '<rect x="16.7" y="10" width="1.4" height="9"/>'+
+    '<rect x="25.2" y="10" width="1.4" height="9"/>'+
+    '<rect x="8.2" y="10" width="18.4" height="2"/>'+
+    '<text x="17" y="7" font-size="9" text-anchor="middle" font-style="italic">3</text>')
+};
 
-$("clickMode").onchange = e=>{ cfg.click=e.target.value; if(running){stop();start();} };
-$("countIn").onchange   = e=>{ cfg.countIn=+e.target.value; };
+function chip(cls, sel){
+  const b=document.createElement("button");
+  b.type="button"; b.className="chip "+cls+(sel?" sel":"");
+  return b;
+}
+
+function renderPickers(){
+  const mp=$("meterPick"); mp.innerHTML="";
+  for (const m of METERS){
+    const b=chip("fig", !cfg.feel && cfg.meter===m);
+    b.textContent=m.id;
+    b.disabled=!!cfg.feel;
+    b.onclick=()=>{ cfg.meter=m; rebuild(); };
+    mp.appendChild(b);
+  }
+
+  const np=$("notePick"); np.innerHTML="";
+  for (const n of NOTES){
+    const b=chip("glyph", !cfg.feel && cfg.note===n);
+    b.innerHTML=NOTE_SVG[n.id];
+    b.setAttribute("aria-label", n.name);
+    b.title=n.name;
+    b.onclick=()=>{ cfg.note=n; cfg.feel=null; rebuild(); };
+    np.appendChild(b);
+  }
+
+  const fp=$("feelPick"); fp.innerHTML="";
+  for (const f of FEELS){
+    const b=chip("sm", cfg.feel===f);
+    b.textContent=f.name;
+    b.onclick=()=>{ cfg.feel = cfg.feel===f ? null : f; rebuild(); };
+    fp.appendChild(b);
+  }
+
+  const pp=$("padPick"); pp.innerHTML="";
+  for (let n=1;n<=8;n++){
+    const b=chip("fig", cfg.pads===n);
+    b.textContent=String(n);
+    b.setAttribute("aria-label", n===1 ? "1 pad" : n+" pads");
+    b.onclick=()=>{
+      cfg.pads=n; buildPads(); renderPickers();
+      if (running){ stop(); start(); }
+      clearAll();
+    };
+    pp.appendChild(b);
+  }
+
+  const cp=$("countPick"); cp.innerHTML="";
+  for (const [v,lab] of [[0,"off"],[1,"1"],[2,"2"]]){
+    const b=chip("fig", cfg.countIn===v);
+    b.textContent=lab;
+    b.setAttribute("aria-label", v ? v+" bar count-in" : "no count-in");
+    b.onclick=()=>{ cfg.countIn=v; renderPickers(); };
+    cp.appendChild(b);
+  }
+
+  $("feelHint").textContent = cfg.feel ? "own bar — tap again to clear" : "";
+}
+
+/* The playhead is a class swap on one cell rather than a redraw, so the grid can
+   be rebuilt whenever it likes without knowing anything about timing. */
+let gridEls=[], lastCell=-1;
+
+function renderGrid(){
+  const host=$("clickGrid"); host.innerHTML="";
+  const sub=gridSub(), names=["off","on","accent"];
+  gridEls=[]; lastCell=-1;
+  cfg.click.forEach((state,i) => {
+    const beat = i%sub===0;
+    const b=document.createElement("button");
+    b.type="button";
+    b.className="cell s"+state+(beat?" beat":"");
+    if (beat) b.dataset.n = String(Math.floor(i/sub)+1);
+    b.setAttribute("aria-label",
+      "beat "+(Math.floor(i/sub)+1)+(beat?"":" +"+(i%sub))+": "+names[state]);
+    b.onclick=()=>{ cfg.click[i]=(cfg.click[i]+1)%3; renderGrid(); };
+    host.appendChild(b);
+    gridEls.push(b);
+  });
+}
+
+/* Which cell you are hearing, not which one was scheduled. Audio queued at time
+   T reaches the ear at T + latency, so the highlight has to sit that far behind
+   ctx.currentTime — otherwise it leads the click you are playing against, which
+   on Bluetooth would be by a visible fraction of a beat. */
+function playhead(){
+  let i = -1;
+  if (running && ctx && gridEls.length){
+    const step = beatDur()/gridSub(), cells = cfg.click.length;
+    const n = Math.floor((ctx.currentTime - latency() - startTime)/step);
+    i = ((n % cells) + cells) % cells;      // count-in runs negative
+  }
+  if (i === lastCell) return;
+  if (gridEls[lastCell]) gridEls[lastCell].classList.remove("now");
+  if (gridEls[i]) gridEls[i].classList.add("now");
+  lastCell = i;
+}
+
+/* Meter and note value both change how many cells the bar has, so the grid is
+   rebuilt from the default rather than stretched — there is no honest mapping
+   from four cells of edits onto seven. */
+function rebuild(){
+  buildPattern(); defaultClick();
+  renderPickers(); renderGrid();
+  if (running){ stop(); start(); }
+  clearAll();
+}
+
+$("advToggle").onclick = () => {
+  const body=$("advBody"), open=body.hidden;
+  body.hidden = !open;
+  $("advToggle").setAttribute("aria-expanded", String(open));
+};
 $("bpm").oninput = e=>{
   cfg.bpm=+e.target.value; $("bpmv").textContent=cfg.bpm;
   if (running){ stop(); start(); clearAll(); }
@@ -541,6 +897,27 @@ $("off").oninput = e=>{ cfg.offset=+e.target.value; $("offv").textContent=cfg.of
 
 $("run").onclick = toggle;
 $("clear").onclick = clearAll;
+
+/* A plain div rather than <details>, because the gear lives up in the transport
+   row and a <summary> would have to sit inside the panel it opens.
+
+   Top is measured when it opens rather than hard-coded, so the panel stays
+   pinned under the transport however the row above it happens to wrap. */
+function setSettings(open){
+  const s=$("settings");
+  if (open){
+    const r = document.querySelector(".transport").getBoundingClientRect();
+    s.style.top = Math.round(r.bottom + 8) + "px";
+    s.style.maxHeight = "calc(100vh - " + Math.round(r.bottom + 22) + "px)";
+  }
+  s.hidden = !open;
+  $("scrim").hidden = !open;
+  $("gear").classList.toggle("on", open);
+  $("gear").setAttribute("aria-expanded", String(open));
+}
+
+$("gear").onclick  = () => setSettings($("settings").hidden);
+$("scrim").onclick = () => setSettings(false);
 
 /* Deliberately stall the main thread, to test whether touch timestamps
    survive it. Interval is prime-ish so it never locks to the beat. */
@@ -554,7 +931,7 @@ $("stress").onchange = e => {
   } else { jank = 0; }
 };
 
-buildPads(); resize(); stats();
+renderPickers(); renderGrid(); buildPads(); resize(); stats();
 
 /* ============================== install ============================== */
 if ("serviceWorker" in navigator){
