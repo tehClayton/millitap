@@ -133,6 +133,9 @@
   .cell.beat{border-color:var(--ink-dim)}
   .cell.s1{background:var(--ink-dim);border-color:var(--ink-dim)}
   .cell.s2{background:var(--true);border-color:var(--true)}
+  /* No transition on the playhead. Easing it would smear the moment the click
+     actually fell across a few frames, and that moment is the whole subject. */
+  .cell.now{box-shadow:0 0 0 2px var(--ink),0 0 12px rgba(230,236,243,.22)}
   .cell.beat::after{content:attr(data-n);position:absolute;top:1px;left:0;right:0;
     font-size:9px;font-family:var(--fig);color:var(--ink-dim)}
   .cell.s1.beat::after,.cell.s2.beat::after{color:#122018}
@@ -511,6 +514,8 @@ function draw(ts){
   }
   lastFrame = ts;
 
+  playhead();
+
   if (!W) return;
   const now = ctx ? ctx.currentTime : 0;
   const pad=16, cy=H/2, half=H/2-pad;
@@ -767,9 +772,14 @@ function renderPickers(){
   $("feelHint").textContent = cfg.feel ? "sets its own bar — tap again to clear" : "";
 }
 
+/* The playhead is a class swap on one cell rather than a redraw, so the grid can
+   be rebuilt whenever it likes without knowing anything about timing. */
+let gridEls=[], lastCell=-1;
+
 function renderGrid(){
   const host=$("clickGrid"); host.innerHTML="";
   const sub=gridSub(), names=["off","on","accent"];
+  gridEls=[]; lastCell=-1;
   cfg.click.forEach((state,i) => {
     const beat = i%sub===0;
     const b=document.createElement("button");
@@ -780,7 +790,25 @@ function renderGrid(){
       "beat "+(Math.floor(i/sub)+1)+(beat?"":" +"+(i%sub))+": "+names[state]);
     b.onclick=()=>{ cfg.click[i]=(cfg.click[i]+1)%3; renderGrid(); };
     host.appendChild(b);
+    gridEls.push(b);
   });
+}
+
+/* Which cell you are hearing, not which one was scheduled. Audio queued at time
+   T reaches the ear at T + latency, so the highlight has to sit that far behind
+   ctx.currentTime — otherwise it leads the click you are playing against, which
+   on Bluetooth would be by a visible fraction of a beat. */
+function playhead(){
+  let i = -1;
+  if (running && ctx && gridEls.length){
+    const step = beatDur()/gridSub(), cells = cfg.click.length;
+    const n = Math.floor((ctx.currentTime - latency() - startTime)/step);
+    i = ((n % cells) + cells) % cells;      // count-in runs negative
+  }
+  if (i === lastCell) return;
+  if (gridEls[lastCell]) gridEls[lastCell].classList.remove("now");
+  if (gridEls[i]) gridEls[i].classList.add("now");
+  lastCell = i;
 }
 
 /* Meter and note value both change how many cells the bar has, so the grid is
