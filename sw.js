@@ -2,7 +2,7 @@
    not a hard refresh, not clearing Safari's history. This constant is the
    single lever, and forgetting it is the #1 way to convince yourself
    GitHub Pages didn't deploy. */
-const VERSION = "v1";
+const VERSION = "v2";
 
 const CACHE = `millitap-${VERSION}`;
 const ASSETS = [

@@ -42,8 +42,16 @@
     border-radius:6px;padding:9px 14px;font-size:15px;cursor:pointer}
   button:active{background:var(--panel-hi)}
   button:focus-visible{outline:2px solid var(--true);outline-offset:2px}
-  #run{min-width:104px;font-weight:600;font-variant-numeric:tabular-nums}
+  /* Icon buttons are square so swapping play for stop can't reflow the row,
+     and 46px keeps them a comfortable touch target on glass. */
+  .iconbtn{display:flex;align-items:center;justify-content:center;
+    width:46px;height:46px;padding:0;flex:0 0 auto}
+  .iconbtn svg{width:22px;height:22px;fill:currentColor;display:block}
   #run.on{background:var(--true);border-color:var(--true);color:#122018}
+  #run .i-stop{display:none}
+  #run.on .i-play{display:none}
+  #run.on .i-stop{display:block}
+  #gear.on{background:var(--panel-hi);border-color:var(--ink-dim)}
   .tempo{display:flex;align-items:center;gap:9px;flex:1;min-width:210px}
   .tempo input[type=range]{flex:1;accent-color:var(--drag);min-width:80px}
   .bpm{font-family:var(--fig);font-size:23px;font-variant-numeric:tabular-nums;min-width:3.2ch;text-align:right}
@@ -51,10 +59,20 @@
 
   .display{flex:0 0 auto;position:relative;background:var(--panel);border:1px solid var(--rule);
     border-radius:8px;overflow:hidden}
-  canvas{display:block;width:100%;height:210px}
+  #cv{display:block;width:100%;height:clamp(130px,24vh,210px)}
   .axis{position:absolute;left:9px;font-family:var(--fig);font-size:10px;pointer-events:none}
   .axis.hi{top:7px;color:var(--rush)}
   .axis.lo{bottom:7px;color:var(--drag)}
+
+  /* Drift meter: the same deviations as the scrolling display, collapsed onto a
+     single horizontal axis. Dead centre is on the beat, dragging left, rushing
+     right, so the last few taps read as one cluster. */
+  .drift{flex:0 0 auto;position:relative;background:var(--panel);
+    border:1px solid var(--rule);border-radius:8px;overflow:hidden}
+  #dv{display:block;width:100%;height:62px}
+  .dlab{position:absolute;top:6px;font-family:var(--fig);font-size:10px;pointer-events:none}
+  .dlab.l{left:9px;color:var(--drag)}
+  .dlab.r{right:9px;color:var(--rush)}
 
   .readout{display:flex;gap:8px;align-items:stretch}
   .stat{flex:1;background:var(--panel);border:1px solid var(--rule);border-radius:8px;
@@ -73,12 +91,8 @@
   .pad.lit{background:var(--panel-hi)}
   .pad.fresh{border-color:currentColor}
 
-  details{background:var(--panel);border:1px solid var(--rule);border-radius:8px;flex:0 0 auto}
-  summary{padding:9px 12px;font-size:14px;color:var(--ink-dim);cursor:pointer;list-style:none}
-  summary::-webkit-details-marker{display:none}
-  summary::before{content:"Settings  ▸"}
-  details[open] summary::before{content:"Settings  ▾"}
-  details[open]{max-height:46vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .settings{background:var(--panel);border:1px solid var(--rule);border-radius:8px;
+    flex:0 0 auto;max-height:46vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
   .fields{padding:2px 12px 13px;display:grid;gap:11px}
   label{display:grid;gap:5px;font-size:13px;color:var(--ink-dim)}
   .check{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-dim)}
@@ -103,21 +117,6 @@
 </head>
 <body>
 
-<div class="transport">
-  <button id="run">Start</button>
-  <div class="tempo">
-    <input id="bpm" type="range" min="30" max="220" value="84" step="1" aria-label="Tempo">
-    <div class="bpm"><span id="bpmv">84</span><span>bpm</span></div>
-  </div>
-  <button id="clear">Clear</button>
-</div>
-
-<div class="display">
-  <canvas id="cv"></canvas>
-  <div class="axis hi">rushing</div>
-  <div class="axis lo">dragging</div>
-</div>
-
 <div class="readout">
   <div class="stat" id="mLast"><b>—</b><i>last tap</i></div>
   <div class="stat"><b id="mMean">—</b><i>average</i></div>
@@ -126,10 +125,22 @@
   <div class="stat"><b id="mErr">0<span class="sl"> / </span>0</b><i>missed / extra</i></div>
 </div>
 
-<div class="pads" id="pads"></div>
+<div class="transport">
+  <button id="run" class="iconbtn" aria-label="Start">
+    <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+    <svg class="i-stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+  </button>
+  <div class="tempo">
+    <input id="bpm" type="range" min="30" max="220" value="84" step="1" aria-label="Tempo">
+    <div class="bpm"><span id="bpmv">84</span><span>bpm</span></div>
+  </div>
+  <button id="clear">Clear</button>
+  <button id="gear" class="iconbtn" aria-label="Settings" aria-expanded="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a7.07 7.07 0 0 0 .06-.94 7.07 7.07 0 0 0-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.12.22.38.3.6.22l2.39-.96c.49.38 1.03.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.48 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
+  </button>
+</div>
 
-<details>
-  <summary></summary>
+<div id="settings" class="settings" hidden>
   <div class="fields">
     <div class="row">
       <label>Rhythm<select id="pattern"></select></label>
@@ -181,7 +192,21 @@
       are hardware-derived</b> and page stalls can't corrupt your readings. If spread climbs with
       it, the web version has a ceiling and native is the fix.</p>
   </div>
-</details>
+</div>
+
+<div class="display">
+  <canvas id="cv"></canvas>
+  <div class="axis hi">rushing</div>
+  <div class="axis lo">dragging</div>
+</div>
+
+<div class="drift">
+  <canvas id="dv"></canvas>
+  <div class="dlab l">dragging</div>
+  <div class="dlab r">rushing</div>
+</div>
+
+<div class="pads" id="pads"></div>
 
 <div id="toast">Updated — tap to reload</div>
 
@@ -360,12 +385,22 @@ function stats(){
 
 /* ============================== canvas ============================== */
 const cv=$("cv"), g2=cv.getContext("2d");
+const dv=$("dv"), g3=dv.getContext("2d");
 let W=0, H=0, RANGE=60, lastFrame=0, jank=0, jankDecay=0;
+let DW=0, DH=0;
+
+/* Size the backing store in device pixels and scale the context to match, so
+   dots stay crisp on retina instead of being upscaled by the compositor. */
+function fit(c, g){
+  const r=c.getBoundingClientRect(), d=Math.min(devicePixelRatio||1, 2.5);
+  c.width=Math.round(r.width*d); c.height=Math.round(r.height*d);
+  g.setTransform(d,0,0,d,0,0);
+  return r;
+}
 
 function resize(){
-  const r=cv.getBoundingClientRect(), d=Math.min(devicePixelRatio||1, 2.5);
-  cv.width=Math.round(r.width*d); cv.height=Math.round(r.height*d);
-  g2.setTransform(d,0,0,d,0,0); W=r.width; H=r.height;
+  const r=fit(cv,g2); W=r.width; H=r.height;
+  const q=fit(dv,g3); DW=q.width; DH=q.height;
 }
 addEventListener("resize", resize);
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
@@ -466,7 +501,51 @@ function draw(ts){
       g2.globalAlpha=1;
     }
   }
+
+  drawDrift();
 }
+
+/* ============================== drift meter ==============================
+   The same deviations on one horizontal axis: centre is on the beat, dragging
+   (late, positive dev) runs left and rushing (early, negative dev) runs right.
+   Only the last few hits are drawn, each fading as newer taps push it down the
+   queue, so this shows the spread you are holding right now — accumulating the
+   whole session is the histogram's job. */
+const DRIFT_N = 8;
+
+function drawDrift(){
+  if (!DW) return;
+  g3.clearRect(0,0,DW,DH);
+
+  const cx=DW/2, half=DW/2-16, dotY=DH*0.38;
+  const x = d => cx - Math.max(-1.35, Math.min(1.35, d/RANGE))*half;
+
+  g3.font = "9px " + css("--fig");
+  g3.textAlign = "center";
+  g3.textBaseline = "middle";
+
+  for (const v of [-RANGE, -RANGE/2, RANGE/2, RANGE]){
+    const xx = x(v);
+    g3.strokeStyle="rgba(138,155,175,.13)"; g3.lineWidth=1;
+    g3.beginPath(); g3.moveTo(xx+.5, DH*0.60); g3.lineTo(xx+.5, DH*0.76); g3.stroke();
+    g3.fillStyle="rgba(138,155,175,.5)";
+    g3.fillText(Math.round(Math.abs(v)), xx, DH*0.88);
+  }
+
+  g3.strokeStyle=css("--true"); g3.globalAlpha=.55; g3.lineWidth=1.5;
+  g3.beginPath(); g3.moveTo(cx+.5, 4); g3.lineTo(cx+.5, DH-4); g3.stroke();
+  g3.globalAlpha=1;
+
+  const recent = taps.filter(t => t.kind==="hit").slice(-DRIFT_N);
+  recent.forEach((t,i) => {
+    const age = recent.length-1-i;          // 0 is the newest tap
+    g3.globalAlpha = Math.max(.12, 1 - age/DRIFT_N);
+    g3.fillStyle = t.dev<-4 ? css("--rush") : t.dev>4 ? css("--drag") : css("--true");
+    g3.beginPath(); g3.arc(x(t.dev), dotY, age ? 4.5 : 7, 0, 6.284); g3.fill();
+  });
+  g3.globalAlpha=1;
+}
+
 requestAnimationFrame(draw);
 
 /* ============================== pads ============================== */
@@ -505,14 +584,14 @@ function start(){
   if (inBeats) nextBeat = -inBeats;
 
   running=true;
-  $("run").textContent="Stop"; $("run").classList.add("on");
+  $("run").classList.add("on"); $("run").setAttribute("aria-label","Stop");
   schedule();
   schedTimer = setInterval(schedule, TICK);
 }
 
 function stop(){
   running=false; clearInterval(schedTimer);
-  $("run").textContent="Start"; $("run").classList.remove("on");
+  $("run").classList.remove("on"); $("run").setAttribute("aria-label","Start");
 }
 
 function clearAll(){
@@ -541,6 +620,15 @@ $("off").oninput = e=>{ cfg.offset=+e.target.value; $("offv").textContent=cfg.of
 
 $("run").onclick = toggle;
 $("clear").onclick = clearAll;
+
+/* A plain div rather than <details>, because the gear lives up in the transport
+   row and a <summary> would have to sit inside the panel it opens. */
+$("gear").onclick = () => {
+  const open = $("settings").hidden;
+  $("settings").hidden = !open;
+  $("gear").classList.toggle("on", open);
+  $("gear").setAttribute("aria-expanded", String(open));
+};
 
 /* Deliberately stall the main thread, to test whether touch timestamps
    survive it. Interval is prime-ish so it never locks to the beat. */
