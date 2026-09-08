@@ -122,10 +122,21 @@
   .tval.live{background:none;border-color:transparent;box-shadow:none;cursor:default}
   .tval.live b{color:var(--true)}
   .tval.live i{color:var(--true);opacity:.7}
-  .tramp{display:flex;align-items:center;justify-content:center;width:30px;height:40px;
-    padding:0;background:none;border:none;box-shadow:none;color:var(--ink-mute)}
-  .tramp svg{width:16px;height:16px;fill:currentColor;display:block}
-  .tramp.on{color:var(--true)}
+  /* The toggle draws its own state: a flat line when the tempo holds, a rising
+     one when it ramps. Colour alone would say "something is on" without saying
+     what, and this sits beside three numbers that all look adjustable. */
+  .tramp{display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:3px;padding:6px 9px;border-radius:var(--r1);color:var(--ink-mute);
+    background:none;border:1px solid transparent;box-shadow:none}
+  .tramp svg{width:20px;height:20px;display:block;fill:none;stroke:currentColor;
+    stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+  .tramp i{font-style:normal;font-size:8px;letter-spacing:.12em;text-transform:uppercase;
+    line-height:1}
+  .tramp .r-rise{display:none}
+  .tramp.on .r-flat{display:none}
+  .tramp.on .r-rise{display:block}
+  .tramp.on{color:var(--true);background:var(--panel-hi);border-color:var(--rule)}
+  .tramp:focus-visible{outline:2px solid var(--true);outline-offset:2px}
 
   /* Recessed wells: no border, an inner shadow instead, so the data sits down
      inside the surface rather than floating on it. */
@@ -310,8 +321,12 @@
     <div class="tvals">
       <button class="tval" id="tFrom" type="button" role="spinbutton"
         aria-label="Tempo" aria-valuemin="30" aria-valuemax="220" aria-valuenow="84"><b>84</b><i>bpm</i></button>
-      <button class="tramp" id="tArrow" type="button" aria-label="Tempo ramp off">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11h11.2l-3.6-3.6L13 6l6 6-6 6-1.4-1.4 3.6-3.6H4z"/></svg>
+      <button class="tramp" id="tRamp" type="button" aria-pressed="false" aria-label="Tempo ramp">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path class="r-flat" d="M3 12h18"/>
+          <path class="r-rise" d="M3 18L21 6"/>
+        </svg>
+        <i>ramp</i>
       </button>
       <button class="tval" id="tTo" type="button" hidden role="spinbutton"
         aria-label="Ramp target tempo" aria-valuemin="30" aria-valuemax="220" aria-valuenow="120"><b>120</b><i>to</i></button>
@@ -1218,8 +1233,9 @@ function renderTempo(){
   put("tSecs", cfg.ramp.secs);
   $("tTo").hidden = !on;
   $("tSecs").hidden = !on;
-  $("tArrow").classList.toggle("on", on);
-  $("tArrow").setAttribute("aria-label", on ? "Tempo ramp on" : "Tempo ramp off");
+  $("tRamp").classList.toggle("on", on);
+  // aria-pressed, not a changing label: it is one control in two states.
+  $("tRamp").setAttribute("aria-pressed", String(on));
 }
 
 function scrub(id){
@@ -1264,7 +1280,7 @@ function scrub(id){
 }
 for (const id in TF) scrub(id);
 
-$("tArrow").onclick = () => {
+$("tRamp").onclick = () => {
   cfg.ramp.on = !cfg.ramp.on;
   renderTempo();
   commitTempo();
