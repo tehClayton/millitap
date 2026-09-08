@@ -313,7 +313,11 @@ function chartPositions(rows){
   for (let i=0;i<len;i++) stats.push(Store.poolPos(rows, i));
   if (!stats.some(s => s.n)) return none(host, "No positional data yet.");
 
-  const pads = (rows[rows.length-1] || {}).pads || 1;
+  const last = rows[rows.length-1] || {};
+  const pads = last.pads || 1;
+  /* Sessions recorded before pad matching was configurable were all pad-assigned,
+     so a missing field means the old alternating behaviour, not the new default. */
+  const assigned = (last.padMode || "alt") === "alt" && pads > 1;
   const f = frame(host, 200, {l:40,r:14,t:12,b:26});
   const span = Math.max(30,
     Math.max(...stats.map(s => s.n ? Math.abs(s.mean)+s.sd : 0))*1.15);
@@ -329,7 +333,7 @@ function chartPositions(rows){
   const name = i => {
     const beat = Math.floor(pos[i]) + 1, sub = pos[i] % 1;
     return (sub ? "beat "+beat+" + "+sub.toFixed(2).replace(/0+$/,"") : "beat "+beat)
-         + (pads > 1 ? " · pad "+(i % pads + 1) : "");
+         + (assigned ? " · pad "+(i % pads + 1) : "");
   };
 
   let empty = 0;
@@ -349,7 +353,7 @@ function chartPositions(rows){
       const hit = el("circle",{cx:x,cy:Y(0),r:12,fill:"transparent"});
       f.svg.appendChild(hit);
       bindTip(hit, "<b>"+name(i)+"</b><br>never hit<br>"+
-        (pads > 1 ? "missed, or played on another pad" : "missed every time"));
+        (assigned ? "missed, or played on another pad" : "missed every time"));
       return;
     }
 
@@ -403,13 +407,14 @@ const tile = (v,l) => '<div class="tile"><b>'+v+'</b><i>'+l+'</i></div>';
 
 /* ------------------------------------------------------------------- table */
 function table(rows){
-  const head = "<tr><th>date</th><th>bpm</th><th>taps</th><th>avg</th><th>spread</th>"+
-               "<th>missed</th><th>extra</th></tr>";
+  const head = "<tr><th>date</th><th>bpm</th><th>pads</th><th>taps</th><th>avg</th>"+
+               "<th>spread</th><th>missed</th><th>extra</th></tr>";
   const body = rows.slice().reverse().map(r => {
     const s = Store.stat(r.n,r.sum,r.sq);
-    return "<tr><td>"+fmtDate(r.t)+"</td><td>"+r.bpm+"</td><td>"+r.n+"</td><td>"+
-      ms(s.mean)+"</td><td>"+s.sd.toFixed(1)+"</td><td>"+(r.missed||0)+"</td><td>"+
-      (r.extra||0)+"</td></tr>";
+    const mode = (r.padMode || "alt") === "alt" && (r.pads||1) > 1 ? " alt" : "";
+    return "<tr><td>"+fmtDate(r.t)+"</td><td>"+r.bpm+"</td><td>"+(r.pads||1)+mode+
+      "</td><td>"+r.n+"</td><td>"+ms(s.mean)+"</td><td>"+s.sd.toFixed(1)+"</td><td>"+
+      (r.missed||0)+"</td><td>"+(r.extra||0)+"</td></tr>";
   }).join("");
   $("tableWrap").innerHTML = '<div class="scroll"><table>'+head+body+'</table></div>';
 }

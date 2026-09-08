@@ -260,6 +260,10 @@
       <h2>Pads</h2>
       <div class="pick" id="padPick"></div>
     </div>
+    <div id="padModeBox">
+      <h2>Pad matching <span class="hint">which pad a note expects</span></h2>
+      <div class="pick" id="padModePick"></div>
+    </div>
     <div>
       <h2>Count-in <span class="hint">bars</span></h2>
       <div class="pick" id="countPick"></div>
@@ -370,7 +374,7 @@ let padEls=[], schedTimer=null, stressTimer=null;
 
 /* click is one state per grid cell: 0 off, 1 on, 2 accent. */
 const cfg = { bpm:84, meter:METERS[0], note:NOTES[0], feel:null,
-              pattern:null, click:[], pads:2, countIn:1, offset:0 };
+              pattern:null, click:[], pads:2, padMode:"any", countIn:1, offset:0 };
 const LOOKAHEAD=0.18, TICK=25, HISTORY=10;
 const beatDur = () => 60/cfg.bpm;
 
@@ -438,7 +442,11 @@ function schedule(){
          on[nextOnset%len].p + (on[nextOnset%len].o||0))*b < horizon){
     const k=nextOnset%len, o=on[k];
     const t = startTime + (Math.floor(nextOnset/len)*bars + o.p + (o.o||0))*b;
-    targets.push({t, k, voice:(o.v!=null?o.v:k)%cfg.pads, claimed:false, done:false});
+    /* A null voice means any pad satisfies this onset. That is the default:
+       the thing being measured is when you played, not which hand did it.
+       Alternating is a second, harder skill, so it is opt-in. */
+    const v = cfg.padMode==="alt" ? (o.v!=null ? o.v : k)%cfg.pads : null;
+    targets.push({t, k, voice:v, claimed:false, done:false});
     nextOnset++;
   }
 
@@ -471,7 +479,7 @@ function tap(voice, perfMs){
   for (const g of targets){
     const d = t - (g.t + lat);
     if (Math.abs(d) > w) continue;
-    if (g.voice !== voice){ anyWrong=true; continue; }
+    if (g.voice != null && g.voice !== voice){ anyWrong=true; continue; }
     if (g.claimed) continue;
     if (Math.abs(d) < Math.abs(bestD)){ best=g; bestD=d; }
   }
@@ -790,7 +798,7 @@ function captureSession(){
     t: Date.now(),
     key: cfg.feel ? "feel:"+cfg.feel.id : cfg.meter.id+"|"+cfg.note.id,
     label: cfg.feel ? cfg.feel.name : cfg.meter.id+" · "+cfg.note.name.toLowerCase(),
-    bpm: cfg.bpm, pads: cfg.pads,
+    bpm: cfg.bpm, pads: cfg.pads, padMode: cfg.padMode,
     n: hits.length, sum: r1(sum), sq: r1(sq),
     missed: Math.max(0, missed - savedMissed),
     extra:  fresh.filter(x => x.kind!=="hit").length,
@@ -878,6 +886,22 @@ function renderPickers(){
     };
     pp.appendChild(b);
   }
+
+  const pm=$("padModePick"); pm.innerHTML="";
+  for (const [v,lab] of [["any","any pad"],["alt","alternating"]]){
+    const b=chip("sm", cfg.padMode===v);
+    b.textContent=lab;
+    b.setAttribute("aria-label", v==="any"
+      ? "any pad counts for any note" : "pads alternate across the notes");
+    b.onclick=()=>{
+      cfg.padMode=v; renderPickers();
+      if (running){ stop(); start(); }
+      clearAll();
+    };
+    pm.appendChild(b);
+  }
+  // With one pad the distinction cannot arise, so the control is not offered.
+  $("padModeBox").hidden = cfg.pads < 2;
 
   const cp=$("countPick"); cp.innerHTML="";
   for (const [v,lab] of [[0,"off"],[1,"1"],[2,"2"]]){
