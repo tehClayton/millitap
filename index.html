@@ -96,11 +96,47 @@
   #run.on .i-play{display:none}
   #run.on .i-stop{display:block}
   #gear.on{background:var(--panel-hi);border-color:var(--ink-mute);color:var(--ink)}
-  .tempo{display:flex;align-items:center;gap:var(--sp3);flex:1;min-width:200px}
-  .tempo input[type=range]{flex:1;accent-color:var(--drag);min-width:80px}
-  .bpm{font-family:var(--fig);font-size:21px;font-variant-numeric:tabular-nums;
-    min-width:3.4ch;text-align:right;letter-spacing:-.01em}
-  .bpm span{font-size:10px;color:var(--ink-mute);margin-left:3px;letter-spacing:.08em}
+  /* Each number is its own control, scrubbed vertically the way a DAW does it.
+     That removes the slider and with it the "which field am I editing" mode a
+     single track forced, and lets each field carry its own resolution — one bpm
+     per notch, five seconds per notch, over ranges twelve times apart. */
+  .tempo{display:flex;align-items:center;gap:var(--sp2);flex:1;min-width:150px}
+  .tvals{display:flex;align-items:center;gap:var(--sp1);flex:0 0 auto}
+  .tval{display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:3px;padding:6px 10px;min-width:56px;border-radius:var(--r1);color:var(--ink);
+    background:linear-gradient(var(--raise-a),var(--raise-b));
+    border:1px solid var(--rule);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.055);
+    cursor:ns-resize;
+    /* Without this the browser claims the vertical drag for panning. */
+    touch-action:none;
+    -webkit-user-select:none;user-select:none}
+  .tval b{font-family:var(--fig);font-size:22px;font-weight:500;line-height:1;
+    font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .tval i{font-style:normal;font-size:8px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--ink-mute);line-height:1}
+  .tval.drag{background:var(--panel-hi);border-color:var(--true)}
+  .tval.drag i{color:var(--ink-dim)}
+  .tval:focus-visible{outline:2px solid var(--true);outline-offset:2px}
+  /* The live readout is output, not input: no raised face, nothing to grab. */
+  .tval.live{background:none;border-color:transparent;box-shadow:none;cursor:default}
+  .tval.live b{color:var(--true)}
+  .tval.live i{color:var(--true);opacity:.7}
+  /* The toggle draws its own state: a flat line when the tempo holds, a rising
+     one when it ramps. Colour alone would say "something is on" without saying
+     what, and this sits beside three numbers that all look adjustable. */
+  .tramp{display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:3px;padding:6px 9px;border-radius:var(--r1);color:var(--ink-mute);
+    background:none;border:1px solid transparent;box-shadow:none}
+  .tramp svg{width:20px;height:20px;display:block;fill:none;stroke:currentColor;
+    stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+  .tramp i{font-style:normal;font-size:8px;letter-spacing:.12em;text-transform:uppercase;
+    line-height:1}
+  .tramp .r-rise{display:none}
+  .tramp.on .r-flat{display:none}
+  .tramp.on .r-rise{display:block}
+  .tramp.on{color:var(--true);background:var(--panel-hi);border-color:var(--rule)}
+  .tramp:focus-visible{outline:2px solid var(--true);outline-offset:2px}
 
   /* Recessed wells: no border, an inner shadow instead, so the data sits down
      inside the surface rather than floating on it. */
@@ -282,8 +318,22 @@
     <svg class="i-stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
   </button>
   <div class="tempo">
-    <input id="bpm" type="range" min="30" max="220" value="84" step="1" aria-label="Tempo">
-    <div class="bpm"><span id="bpmv">84</span><span>bpm</span></div>
+    <div class="tvals">
+      <button class="tval" id="tFrom" type="button" role="spinbutton"
+        aria-label="Tempo" aria-valuemin="30" aria-valuemax="220" aria-valuenow="84"><b>84</b><i>bpm</i></button>
+      <button class="tramp" id="tRamp" type="button" aria-pressed="false" aria-label="Tempo ramp">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path class="r-flat" d="M3 12h18"/>
+          <path class="r-rise" d="M3 18L21 6"/>
+        </svg>
+        <i>ramp</i>
+      </button>
+      <button class="tval" id="tTo" type="button" hidden role="spinbutton"
+        aria-label="Ramp target tempo" aria-valuemin="30" aria-valuemax="220" aria-valuenow="120"><b>120</b><i>to</i></button>
+      <button class="tval" id="tSecs" type="button" hidden role="spinbutton"
+        aria-label="Ramp duration in seconds" aria-valuemin="5" aria-valuemax="600" aria-valuenow="30"><b>30</b><i>sec</i></button>
+      <span class="tval live" id="tNow" hidden><b>—</b><i>now</i></span>
+    </div>
   </div>
   <button id="clear">Clear</button>
   <button id="gear" class="iconbtn" aria-label="Settings" aria-expanded="false">
@@ -319,6 +369,7 @@
     <div class="pick" id="phrasePick"></div>
     <div class="grid" id="barGrid"></div>
   </div>
+
 
   <div class="sect two">
     <div>
@@ -443,10 +494,53 @@ let padEls=[], schedTimer=null, stressTimer=null;
    the entire exercise — so only the click stops. */
 const cfg = { bpm:84, meter:METERS[0], note:NOTES[0], feel:null,
               pattern:null, click:[], pads:2, padMode:"any", countIn:1, offset:0,
-              phrase:4, bars:[1,1,1,1] };
+              phrase:4, bars:[1,1,1,1], ramp:{on:false, to:120, secs:30} };
 const muted = () => cfg.bars.some(x => !x);
 const LOOKAHEAD=0.18, TICK=25, HISTORY=10;
 const beatDur = () => 60/cfg.bpm;
+
+/* ============================== tempo map ==============================
+   Without a ramp, beat n happens at n * 60/bpm — a multiplication. With one,
+   tempo varies over time, so beat position is the integral of tempo and the
+   relationship stops being linear.
+
+   Ramping LINEARLY IN TIME keeps both directions closed form, which matters
+   because both are needed: scheduling walks beats -> seconds, and the playhead
+   walks seconds -> beats. Neither has to step or search.
+
+     bpm(t)   = b0 + (b1-b0)·t/T                    for 0 <= t <= T
+     beats(t) = (b0·t + k·t²)/60   where k = (b1-b0)/2T
+     t(beats) = (-b0 + sqrt(b0² + 240·k·beats)) / 2k
+
+   Before the ramp (the count-in) and after it, tempo is constant and both
+   collapse back to the multiplication. */
+const rampOn = () =>
+  cfg.ramp.on && cfg.ramp.secs > 0 && cfg.ramp.to !== cfg.bpm;
+const rampK     = () => (cfg.ramp.to - cfg.bpm) / (2 * cfg.ramp.secs);
+const rampBeats = () => cfg.ramp.secs * (cfg.bpm + cfg.ramp.to) / 120;
+
+/* beats since the top of bar 0 -> seconds since the top of bar 0 */
+function timeAt(B){
+  if (!rampOn() || B <= 0) return B * 60 / cfg.bpm;
+  const BT = rampBeats();
+  if (B >= BT) return cfg.ramp.secs + (B - BT) * 60 / cfg.ramp.to;
+  const k = rampK();
+  return (-cfg.bpm + Math.sqrt(cfg.bpm*cfg.bpm + 240*k*B)) / (2*k);
+}
+
+/* seconds -> beats, the inverse */
+function beatsAt(t){
+  if (!rampOn() || t <= 0) return t * cfg.bpm / 60;
+  if (t >= cfg.ramp.secs) return rampBeats() + (t - cfg.ramp.secs) * cfg.ramp.to / 60;
+  return (cfg.bpm * t + rampK() * t * t) / 60;
+}
+
+/* Instantaneous tempo, for the capture window and the live readout. */
+function bpmAt(t){
+  if (!rampOn() || t <= 0) return cfg.bpm;
+  if (t >= cfg.ramp.secs) return cfg.ramp.to;
+  return cfg.bpm + (cfg.ramp.to - cfg.bpm) * t / cfg.ramp.secs;
+}
 
 /* One grid cell per subdivision of the current pattern. A feel's onsets are
    uneven, so it gets a plain eighth-note grid for its clicks to sit on. */
@@ -469,7 +563,10 @@ function defaultClick(){
 buildPattern(); defaultClick();
 
 function captureWindow(){
-  const on=cfg.pattern.on, b=beatDur();
+  /* Instantaneous, not nominal: under a ramp the window that counts as "near
+     this onset" has to shrink as the beats get shorter. */
+  const on=cfg.pattern.on;
+  const b = 60 / (ctx ? bpmAt(ctx.currentTime - startTime) : cfg.bpm);
   let min=cfg.pattern.beats;
   for (let i=0;i<on.length;i++){
     const a=on[i].p+(on[i].o||0);
@@ -506,12 +603,12 @@ function click(at, accent){
 
 function schedule(){
   const horizon = ctx.currentTime + LOOKAHEAD;
-  const on=cfg.pattern.on, len=on.length, bars=cfg.pattern.beats, b=beatDur();
+  const on=cfg.pattern.on, len=on.length, bars=cfg.pattern.beats;
+  const beatOf = n => Math.floor(n/len)*bars + on[n%len].p + (on[n%len].o||0);
 
-  while (startTime + (Math.floor(nextOnset/len)*bars +
-         on[nextOnset%len].p + (on[nextOnset%len].o||0))*b < horizon){
+  while (startTime + timeAt(beatOf(nextOnset)) < horizon){
     const k=nextOnset%len, o=on[k];
-    const t = startTime + (Math.floor(nextOnset/len)*bars + o.p + (o.o||0))*b;
+    const t = startTime + timeAt(beatOf(nextOnset));
     /* A null voice means any pad satisfies this onset. That is the default:
        the thing being measured is when you played, not which hand did it.
        Alternating is a second, harder skill, so it is opt-in. */
@@ -523,9 +620,9 @@ function schedule(){
   /* One pass per grid cell rather than per beat, so an accent can land on any
      subdivision. Read live from cfg.click, so editing the grid mid-drill takes
      effect as soon as the lookahead window rolls past. */
-  const sub=gridSub(), cells=cfg.click.length, step=b/sub;
-  while (startTime + nextCell*step < horizon){
-    const t = startTime + nextCell*step;
+  const sub=gridSub(), cells=cfg.click.length;
+  while (startTime + timeAt(nextCell/sub) < horizon){
+    const t = startTime + timeAt(nextCell/sub);
     const i = ((nextCell % cells) + cells) % cells;   // count-in runs negative
     /* Count-in is exempt: it runs before bar 0, and a muted count-in would
        leave you guessing where the drill even starts. */
@@ -654,6 +751,7 @@ function draw(ts){
   lastFrame = ts;
 
   playhead();
+  liveTempo();
 
   if (!W) return;
   const now = ctx ? ctx.currentTime : 0;
@@ -861,11 +959,21 @@ function captureSession(){
 
   const len = cfg.pattern.on.length;
   const c = Array.from({length:len}, () => [0,0,0]);
+  /* Also bin every tap by the tempo it was played at, in 5bpm steps. For a
+     fixed drill that is one bin; for a ramp it is a curve across the sweep,
+     which is the only way a ramped session can say anything useful about where
+     consistency breaks down. Recording one aggregate would pin the whole sweep
+     to whichever bpm we happened to call the session's. */
+  const tb = new Map();
   let sum=0, sq=0;
   for (const h of hits){
     sum += h.dev; sq += h.dev*h.dev;
     const cell = c[h.k];
     if (cell){ cell[0]++; cell[1]+=h.dev; cell[2]+=h.dev*h.dev; }
+    const band = Math.round(bpmAt(h.t - startTime) / 5) * 5;
+    let e = tb.get(band);
+    if (!e) tb.set(band, e = [band,0,0,0]);
+    e[1]++; e[2] += h.dev; e[3] += h.dev*h.dev;
   }
   const r1 = v => Math.round(v*10)/10;
 
@@ -876,15 +984,18 @@ function captureSession(){
        with the same drill played to a click — but keying the exact pattern
        would spawn a bucket per arrangement and none would ever fill. */
     key: (cfg.feel ? "feel:"+cfg.feel.id : cfg.meter.id+"|"+cfg.note.id)
-         + (muted() ? "|m" : ""),
+         + (muted() ? "|m" : "") + (rampOn() ? "|r" : ""),
     label: (cfg.feel ? cfg.feel.name : cfg.meter.id+" · "+cfg.note.name.toLowerCase())
-         + (muted() ? " · muted bars" : ""),
+         + (muted() ? " · muted bars" : "") + (rampOn() ? " · ramp" : ""),
+    ramp: rampOn() ? {to:cfg.ramp.to, secs:cfg.ramp.secs} : null,
     bpm: cfg.bpm, pads: cfg.pads, padMode: cfg.padMode,
     bars: cfg.bars.slice(),
     n: hits.length, sum: r1(sum), sq: r1(sq),
     missed: Math.max(0, missed - savedMissed),
     extra:  fresh.filter(x => x.kind!=="hit").length,
     pos: cfg.pattern.on.map(o => o.p),
+    tb: [...tb.values()].sort((a,b) => a[0]-b[0])
+          .map(e => [e[0], e[1], r1(e[2]), r1(e[3])]),
     c:   c.map(x => [x[0], r1(x[1]), r1(x[2])])
   });
 
@@ -1027,6 +1138,18 @@ function renderBars(){
   });
 }
 
+/* While ramping, the readout shows the tempo you are actually hearing. The
+   slider keeps meaning the tempo the ramp starts from, so the two do not fight. */
+let shownBpm = -1;
+function liveTempo(){
+  const on = running && ctx && rampOn();
+  const v = on ? Math.round(bpmAt(ctx.currentTime - startTime)) : null;
+  if (v === shownBpm) return;
+  shownBpm = v;
+  $("tNow").hidden = !on;
+  if (on) $("tNow").querySelector("b").textContent = v;
+}
+
 /* The playhead is a class swap on one cell rather than a redraw, so the grid can
    be rebuilt whenever it likes without knowing anything about timing. */
 let gridEls=[], lastCell=-1;
@@ -1056,8 +1179,8 @@ function renderGrid(){
 function playhead(){
   let i = -1;
   if (running && ctx && gridEls.length){
-    const step = beatDur()/gridSub(), cells = cfg.click.length;
-    const n = Math.floor((ctx.currentTime - latency() - startTime)/step);
+    const sub = gridSub(), cells = cfg.click.length;
+    const n = Math.floor(beatsAt(ctx.currentTime - latency() - startTime) * sub);
     i = ((n % cells) + cells) % cells;      // count-in runs negative
   }
   if (i === lastCell) return;
@@ -1076,15 +1199,99 @@ function rebuild(){
   clearAll();
 }
 
+/* Each field is scrubbed directly: press and drag, up to raise, down to lower —
+   the gesture every DAW uses on a value field. px is how far you drag for one
+   notch, so the seconds field moves five at a time over a range twelve times
+   wider than the tempo without feeling twelve times slower. */
+const TF = {
+  tFrom: { get:()=>cfg.bpm,       set:v=>cfg.bpm=v,       min:30, max:220, step:1, px:3 },
+  tTo:   { get:()=>cfg.ramp.to,   set:v=>cfg.ramp.to=v,   min:30, max:220, step:1, px:3 },
+  tSecs: { get:()=>cfg.ramp.secs, set:v=>cfg.ramp.secs=v, min:5,  max:600, step:5, px:3 }
+};
+
+function setField(id, v){
+  const f = TF[id];
+  f.set(Math.max(f.min, Math.min(f.max, v)));
+  renderTempo();
+}
+
+function commitTempo(){
+  if (running){ stop(); start(); }
+  clearAll();
+}
+
+function renderTempo(){
+  const on = cfg.ramp.on;
+  const put = (id, v, lab) => {
+    const el = $(id);
+    el.querySelector("b").textContent = v;
+    if (lab) el.querySelector("i").textContent = lab;
+    el.setAttribute("aria-valuenow", v);
+  };
+  put("tFrom", cfg.bpm, on ? "start" : "bpm");
+  put("tTo",   cfg.ramp.to);
+  put("tSecs", cfg.ramp.secs);
+  $("tTo").hidden = !on;
+  $("tSecs").hidden = !on;
+  $("tRamp").classList.toggle("on", on);
+  // aria-pressed, not a changing label: it is one control in two states.
+  $("tRamp").setAttribute("aria-pressed", String(on));
+}
+
+function scrub(id){
+  const el = $(id), f = TF[id];
+  let base = 0, y0 = 0, live = false;
+
+  el.addEventListener("pointerdown", e => {
+    live = true; base = f.get(); y0 = e.clientY;
+    el.setPointerCapture(e.pointerId);
+    el.classList.add("drag");
+    e.preventDefault();
+  });
+
+  el.addEventListener("pointermove", e => {
+    if (!live) return;
+    // Screen y grows downward, so subtracting puts "up" on the positive side.
+    setField(id, base + Math.round((y0 - e.clientY) / f.px) * f.step);
+  });
+
+  const end = e => {
+    if (!live) return;
+    live = false;
+    el.classList.remove("drag");
+    if (el.hasPointerCapture && el.hasPointerCapture(e.pointerId))
+      el.releasePointerCapture(e.pointerId);
+    commitTempo();
+  };
+  el.addEventListener("pointerup", end);
+  el.addEventListener("pointercancel", end);
+
+  /* A drag is not reachable from a keyboard, and the slider this replaced was.
+     role=spinbutton means the arrows are what a screen reader will announce. */
+  el.addEventListener("keydown", e => {
+    const up = e.key==="ArrowUp"   || e.key==="PageUp";
+    const dn = e.key==="ArrowDown" || e.key==="PageDown";
+    if (!up && !dn) return;
+    e.preventDefault();
+    const mult = (e.key==="PageUp" || e.key==="PageDown") ? 10 : 1;
+    setField(id, f.get() + (up ? 1 : -1) * f.step * mult);
+    commitTempo();
+  });
+}
+for (const id in TF) scrub(id);
+
+$("tRamp").onclick = () => {
+  cfg.ramp.on = !cfg.ramp.on;
+  renderTempo();
+  commitTempo();
+};
+
 $("advToggle").onclick = () => {
   const body=$("advBody"), open=body.hidden;
   body.hidden = !open;
   $("advToggle").setAttribute("aria-expanded", String(open));
 };
-$("bpm").oninput = e=>{
-  cfg.bpm=+e.target.value; $("bpmv").textContent=cfg.bpm;
-  if (running){ stop(); start(); clearAll(); }
-};
+
 $("off").oninput = e=>{ cfg.offset=+e.target.value; $("offv").textContent=cfg.offset+" ms"; };
 
 $("run").onclick = toggle;
@@ -1123,7 +1330,8 @@ $("stress").onchange = e => {
   } else { jank = 0; }
 };
 
-renderPickers(); renderGrid(); renderBars(); buildPads(); resize(); stats();
+renderPickers(); renderGrid(); renderBars(); renderTempo();
+buildPads(); resize(); stats();
 
 /* ============================== install ============================== */
 if ("serviceWorker" in navigator){
