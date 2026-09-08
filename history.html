@@ -87,7 +87,10 @@
 
   .legend{display:flex;flex-wrap:wrap;gap:var(--sp3) var(--sp4);padding-top:10px;
     font-size:11px;color:var(--ink-mute)}
-  .legend span{display:flex;align-items:center;gap:6px}
+  /* Child combinator for the same reason: the tempo key nests a .ramp span,
+     and a descendant rule outranks .ramp's own gap, spacing the swatches apart
+     so the ramp reads as separate chips rather than one scale. */
+  .legend > span{display:flex;align-items:center;gap:6px}
   .sw{width:10px;height:10px;border-radius:3px;flex:0 0 auto}
   .ramp{display:flex;gap:2px}
   .ramp i{width:13px;height:10px;border-radius:2px;display:block}

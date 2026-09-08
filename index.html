@@ -133,7 +133,10 @@
   .hero.second b{font-size:clamp(24px,5vh,34px)}
   .minor{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:var(--sp2) var(--sp5);
     padding:2px var(--sp1) 0}
-  .minor span{display:flex;align-items:baseline;gap:7px;min-width:0}
+  /* Child combinator, not a descendant one: mErr nests a <span class="sl">
+     for the separator, and a bare `.minor span` turned that into a block-level
+     flex container, breaking "0 / 0" onto three lines. */
+  .minor > span{display:flex;align-items:baseline;gap:7px;min-width:0}
   .minor b{font-family:var(--fig);font-size:15px;font-weight:500;
     font-variant-numeric:tabular-nums;white-space:nowrap}
   .minor i{font-style:normal;font-size:10px;letter-spacing:.1em;
