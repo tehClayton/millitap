@@ -238,7 +238,7 @@
     </section>
 
     <section class="card">
-      <h2>Spread vs tempo <span class="hint">where consistency breaks down</span></h2>
+      <h2>Spread vs tempo <span class="hint">pooled per 5bpm · where it breaks down</span></h2>
       <div class="chart" id="c4"></div>
     </section>
 
@@ -460,17 +460,27 @@ function chartPositions(rows){
 /* --------------------------------------------------------- 4 · spread vs bpm */
 function chartTempo(rows){
   const host = $("c4");
-  if (rows.length < 2) return none(host, "Needs at least two sessions.");
+  /* Bands, not sessions. A ramped session sweeps a range, so plotting it at one
+     bpm would be a fiction; pooling by tempo also means fixed-tempo sessions at
+     the same speed reinforce each other instead of scattering. Thin bands are
+     dropped — three taps is not a spread. */
+  const pts = Store.poolTempo(rows).filter(p => p.n >= 4);
+  if (pts.length < 2) return none(host, "Needs taps across more than one tempo.");
+
   const f = frame(host, 180, {l:40,r:14,t:10,b:26});
-  const pts = rows.map(r => ({b:r.bpm, sd:Store.stat(r.n,r.sum,r.sq).sd, r}));
-  const lo = Math.min(...pts.map(p=>p.b)), hi = Math.max(...pts.map(p=>p.b));
+  const lo = pts[0].bpm, hi = pts[pts.length-1].bpm;
   const top = Math.max(12, Math.max(...pts.map(p=>p.sd))*1.15);
   const X = b => hi===lo ? (f.L+f.R)/2 : f.L + (b-lo)/(hi-lo)*(f.R-f.L);
   const Y = v => f.B - v/top*(f.B-f.T);
 
   for (let g=0; g<=3; g++){ const v=top*g/3; gridLine(f, Y(v), Math.round(v)); }
-  for (const p of pts) dot(f, X(p.b), Y(p.sd), "m-dim",
-    "<b>"+p.sd.toFixed(1)+" ms spread</b><br>"+p.b+" bpm · "+p.r.n+" taps<br>"+fmtDate(p.r.t));
+
+  if (pts.length > 1){
+    f.svg.appendChild(el("polyline",{
+      points: pts.map(p => X(p.bpm)+","+Y(p.sd)).join(" "), "class":"trend"}));
+  }
+  for (const p of pts) dot(f, X(p.bpm), Y(p.sd), "m-dim",
+    "<b>"+p.sd.toFixed(1)+" ms spread</b><br>"+p.bpm+" bpm · "+p.n+" taps");
   xLabel(f, f.L, lo+" bpm");
   if (hi !== lo) xLabel(f, f.R, hi+" bpm");
 }
@@ -497,7 +507,8 @@ function table(rows){
   const body = rows.slice().reverse().map(r => {
     const s = Store.stat(r.n,r.sum,r.sq);
     const mode = (r.padMode || "alt") === "alt" && (r.pads||1) > 1 ? " alt" : "";
-    return "<tr><td>"+fmtDate(r.t)+"</td><td>"+r.bpm+"</td><td>"+(r.pads||1)+mode+
+    const tempo = r.ramp ? r.bpm+"→"+r.ramp.to : String(r.bpm);
+    return "<tr><td>"+fmtDate(r.t)+"</td><td>"+tempo+"</td><td>"+(r.pads||1)+mode+
       "</td><td>"+r.n+"</td><td>"+ms(s.mean)+"</td><td>"+s.sd.toFixed(1)+"</td><td>"+
       (r.missed||0)+"</td><td>"+(r.extra||0)+"</td></tr>";
   }).join("");

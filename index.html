@@ -922,11 +922,21 @@ function captureSession(){
 
   const len = cfg.pattern.on.length;
   const c = Array.from({length:len}, () => [0,0,0]);
+  /* Also bin every tap by the tempo it was played at, in 5bpm steps. For a
+     fixed drill that is one bin; for a ramp it is a curve across the sweep,
+     which is the only way a ramped session can say anything useful about where
+     consistency breaks down. Recording one aggregate would pin the whole sweep
+     to whichever bpm we happened to call the session's. */
+  const tb = new Map();
   let sum=0, sq=0;
   for (const h of hits){
     sum += h.dev; sq += h.dev*h.dev;
     const cell = c[h.k];
     if (cell){ cell[0]++; cell[1]+=h.dev; cell[2]+=h.dev*h.dev; }
+    const band = Math.round(bpmAt(h.t - startTime) / 5) * 5;
+    let e = tb.get(band);
+    if (!e) tb.set(band, e = [band,0,0,0]);
+    e[1]++; e[2] += h.dev; e[3] += h.dev*h.dev;
   }
   const r1 = v => Math.round(v*10)/10;
 
@@ -947,6 +957,8 @@ function captureSession(){
     missed: Math.max(0, missed - savedMissed),
     extra:  fresh.filter(x => x.kind!=="hit").length,
     pos: cfg.pattern.on.map(o => o.p),
+    tb: [...tb.values()].sort((a,b) => a[0]-b[0])
+          .map(e => [e[0], e[1], r1(e[2]), r1(e[3])]),
     c:   c.map(x => [x[0], r1(x[1]), r1(x[2])])
   });
 

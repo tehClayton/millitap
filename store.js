@@ -87,6 +87,26 @@ const Store = (() => {
       return { n, mean, sd: Math.sqrt(Math.max(0, sq/n - mean*mean)) };
     },
 
+    /* Tempo bands pooled across a bucket. Sessions recorded before tempo
+       binning existed carry no bands, so their whole aggregate stands in as a
+       single band at the tempo they were played at — which is exactly what it
+       was, for a fixed-tempo drill. */
+    poolTempo(rows){
+      const m = new Map();
+      for (const r of rows){
+        const bands = (Array.isArray(r.tb) && r.tb.length)
+          ? r.tb : [[r.bpm, r.n, r.sum, r.sq]];
+        for (const b of bands){
+          let e = m.get(b[0]);
+          if (!e) m.set(b[0], e = {bpm:b[0], n:0, sum:0, sq:0});
+          e.n += b[1]; e.sum += b[2]; e.sq += b[3];
+        }
+      }
+      return [...m.values()]
+        .map(e => { const s = Store.stat(e.n, e.sum, e.sq); s.bpm = e.bpm; return s; })
+        .sort((a,b) => a.bpm - b.bpm);
+    },
+
     /* Pool one position across every session in a bucket. */
     poolPos(rows, i){
       let n=0, sum=0, sq=0;
