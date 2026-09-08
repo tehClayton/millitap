@@ -225,6 +225,22 @@
   .advbtn[aria-expanded="true"]{color:var(--ink)}
   .advbtn[aria-expanded="true"] .chev{transform:rotate(90deg)}
   #advBody{display:grid;gap:var(--sp3);padding-top:var(--sp3)}
+  #tplBody{display:grid;gap:var(--sp3);padding-top:var(--sp1)}
+  .steps{display:grid;gap:2px}
+  .step{display:flex;align-items:center;gap:var(--sp2);padding:3px 5px;
+    border-radius:var(--r1)}
+  .step.now{background:rgba(127,203,143,.09)}
+  .step.now .sd{color:var(--ink)}
+  .sn{font-family:var(--fig);font-size:11px;color:var(--ink-mute);min-width:1.5ch}
+  .sd{flex:1;min-width:0;font-size:12px;color:var(--ink-dim);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .slen{min-width:50px;padding:4px 7px;gap:2px}
+  .slen b{font-size:15px}
+  .mini{padding:5px 7px;font-size:11px;min-width:28px;line-height:1;
+    border-radius:var(--r1);color:var(--ink-dim);
+    background:linear-gradient(var(--raise-a),var(--raise-b));
+    border:1px solid var(--rule);box-shadow:inset 0 1px 0 rgba(255,255,255,.055)}
+  .ct{color:var(--ink-mute);font-family:var(--fig);font-size:11px;margin-left:6px}
 
   .pick{display:flex;flex-wrap:wrap;gap:var(--sp2)}
   .chip{padding:8px 12px;font-size:12px;border-radius:var(--r1);
@@ -333,6 +349,7 @@
       <button class="tval" id="tSecs" type="button" hidden role="spinbutton"
         aria-label="Ramp duration in seconds" aria-valuemin="5" aria-valuemax="600" aria-valuenow="30"><b>30</b><i>sec</i></button>
       <span class="tval live" id="tNow" hidden><b>—</b><i>now</i></span>
+      <span class="tval live" id="tStep" hidden><b>–/–</b><i>step</i></span>
     </div>
   </div>
   <button id="clear">Clear</button>
@@ -383,6 +400,19 @@
     <div>
       <h2>Count-in <span class="hint">bars</span></h2>
       <div class="pick" id="countPick"></div>
+    </div>
+  </div>
+
+  <div class="sect">
+    <h2>Drill template <span class="hint" id="tplHint"></span></h2>
+    <div class="pick" id="tplPick"></div>
+    <div id="tplBody" hidden>
+      <div class="steps" id="tplSteps"></div>
+      <div class="pick">
+        <button class="chip sm" type="button" id="tplAdd">add current settings</button>
+        <button class="chip sm" type="button" id="tplRename">rename</button>
+        <button class="chip sm" type="button" id="tplDel">delete</button>
+      </div>
     </div>
   </div>
 
@@ -752,6 +782,7 @@ function draw(ts){
 
   playhead();
   liveTempo();
+  tickTemplate();
 
   if (!W) return;
   const now = ctx ? ctx.currentTime : 0;
@@ -920,7 +951,13 @@ addEventListener("keydown", e => {
 });
 
 /* ============================== transport ============================== */
-function toggle(){ running ? stop() : start(); }
+function toggle(){
+  if (running){ stop(); tplIdx = -1; renderTemplates(); return; }
+  // Pressing play with a template selected starts it at the top.
+  if (tplSel && tplSel.steps.length){ tplIdx = 0; applyStep(tplSel.steps[0]); }
+  start();
+  renderTemplates();
+}
 
 function start(){
   if (!ctx) ctx = new (window.AudioContext||window.webkitAudioContext)({latencyHint:"interactive"});
@@ -1238,8 +1275,10 @@ function renderTempo(){
   $("tRamp").setAttribute("aria-pressed", String(on));
 }
 
-function scrub(id){
-  const el = $(id), f = TF[id];
+/* Generic, so a template's step-length field behaves exactly like a tempo field
+   instead of inventing a second gesture for the same job. */
+function scrubEl(el, f){
+  const apply = v => f.set(Math.max(f.min, Math.min(f.max, v)));
   let base = 0, y0 = 0, live = false;
 
   el.addEventListener("pointerdown", e => {
@@ -1252,7 +1291,7 @@ function scrub(id){
   el.addEventListener("pointermove", e => {
     if (!live) return;
     // Screen y grows downward, so subtracting puts "up" on the positive side.
-    setField(id, base + Math.round((y0 - e.clientY) / f.px) * f.step);
+    apply(base + Math.round((y0 - e.clientY) / f.px) * f.step);
   });
 
   const end = e => {
@@ -1261,7 +1300,7 @@ function scrub(id){
     el.classList.remove("drag");
     if (el.hasPointerCapture && el.hasPointerCapture(e.pointerId))
       el.releasePointerCapture(e.pointerId);
-    commitTempo();
+    if (f.commit) f.commit();
   };
   el.addEventListener("pointerup", end);
   el.addEventListener("pointercancel", end);
@@ -1274,11 +1313,206 @@ function scrub(id){
     if (!up && !dn) return;
     e.preventDefault();
     const mult = (e.key==="PageUp" || e.key==="PageDown") ? 10 : 1;
-    setField(id, f.get() + (up ? 1 : -1) * f.step * mult);
-    commitTempo();
+    apply(f.get() + (up ? 1 : -1) * f.step * mult);
+    if (f.commit) f.commit();
   });
 }
-for (const id in TF) scrub(id);
+
+for (const id in TF)
+  scrubEl($(id), Object.assign({}, TF[id],
+    { set: v => setField(id, v), commit: commitTempo }));
+
+/* ============================== templates ==============================
+   A template is an ordered list of steps, each a full snapshot of the drill
+   settings plus a length in bars or seconds. Steps are captured from the live
+   configuration rather than built in a separate editor: you set a drill up the
+   way you always do, then keep it.
+
+   Each step runs as its own drill — stop, apply, start — so it lands in history
+   as its own session under its own bucket, and gets a count-in before a new
+   tempo or meter. Splicing a config change into a running scheduler would mean
+   unpicking whatever the lookahead window had already queued. */
+let tplSel = null;   // the chosen template, or null
+let tplIdx = -1;     // step currently playing, -1 when not running one
+
+const saveTemplate = () => { if (tplSel) Store.putTemplate(tplSel); };
+
+function stepLabel(st){
+  const f = st.feel && FEELS.find(x => x.id === st.feel);
+  const n = NOTES.find(x => x.id === st.note);
+  const base = f ? f.name : st.meter + " · " + (n ? n.name.toLowerCase() : st.note);
+  return base + " · " + st.bpm + (st.ramp && st.ramp.on ? "→" + st.ramp.to : "");
+}
+
+function snapshotStep(){
+  return {
+    len:{ u:"bars", n:8 },
+    bpm: cfg.bpm,
+    meter: cfg.meter.id, note: cfg.note.id, feel: cfg.feel ? cfg.feel.id : null,
+    pads: cfg.pads, padMode: cfg.padMode, countIn: cfg.countIn,
+    click: cfg.click.slice(), bars: cfg.bars.slice(),
+    ramp: { on:cfg.ramp.on, to:cfg.ramp.to, secs:cfg.ramp.secs }
+  };
+}
+
+function applyStep(st){
+  cfg.bpm   = st.bpm;
+  cfg.meter = METERS.find(m => m.id === st.meter) || METERS[0];
+  cfg.note  = NOTES.find(n => n.id === st.note)   || NOTES[0];
+  cfg.feel  = st.feel ? (FEELS.find(f => f.id === st.feel) || null) : null;
+  cfg.pads  = st.pads; cfg.padMode = st.padMode; cfg.countIn = st.countIn;
+  cfg.ramp  = { on:st.ramp.on, to:st.ramp.to, secs:st.ramp.secs };
+  buildPattern();
+  /* A stored grid only fits the pattern it was captured against. If a template
+     ever holds an inconsistent one, rebuild rather than index off the end. */
+  if (st.click && st.click.length === cfg.pattern.beats * gridSub())
+    cfg.click = st.click.slice();
+  else defaultClick();
+  cfg.bars = (st.bars && st.bars.length) ? st.bars.slice() : [1];
+  cfg.phrase = cfg.bars.length;
+  buildPads();
+  renderPickers(); renderGrid(); renderBars(); renderTempo();
+}
+
+function stepDone(){
+  if (tplIdx < 0 || !running || !ctx || !tplSel) return false;
+  const st = tplSel.steps[tplIdx];
+  const t = ctx.currentTime - startTime;
+  if (t <= 0) return false;                       // still counting in
+  return st.len.u === "sec" ? t >= st.len.n
+                            : beatsAt(t) >= st.len.n * cfg.pattern.beats;
+}
+
+function tickTemplate(){
+  if (!stepDone()) return;
+  const last = tplIdx + 1 >= tplSel.steps.length;
+  stop();        // captures the step just played as its own session
+  clearAll();    // and resets the readout so the next one starts clean
+  if (last){ tplIdx = -1; renderTemplates(); return; }
+  tplIdx++;
+  applyStep(tplSel.steps[tplIdx]);
+  start();
+  renderTemplates();
+}
+
+function moveStep(i, d){
+  const s = tplSel.steps, j = i + d;
+  if (j < 0 || j >= s.length) return;
+  const t = s[i]; s[i] = s[j]; s[j] = t;
+  saveTemplate(); renderTemplates();
+}
+
+function mini(text, fn){
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "mini"; b.textContent = text;
+  b.onclick = fn;
+  return b;
+}
+
+function renderSteps(){
+  const host = $("tplSteps"); host.innerHTML = "";
+  if (!tplSel) return;
+  tplSel.steps.forEach((st, i) => {
+    const row = document.createElement("div");
+    row.className = "step" + (i === tplIdx ? " now" : "");
+
+    const n = document.createElement("span");
+    n.className = "sn"; n.textContent = String(i+1);
+
+    const lab = document.createElement("span");
+    lab.className = "sd"; lab.textContent = stepLabel(st);
+
+    const len = document.createElement("button");
+    len.type = "button"; len.className = "tval slen";
+    len.setAttribute("role", "spinbutton");
+    len.setAttribute("aria-label", "Step " + (i+1) + " length");
+    len.setAttribute("aria-valuenow", st.len.n);
+    len.innerHTML = "<b>" + st.len.n + "</b><i>" + st.len.u + "</i>";
+    const secs = st.len.u === "sec";
+    scrubEl(len, {
+      get: () => st.len.n,
+      set: v => { st.len.n = v;
+                  len.querySelector("b").textContent = v;
+                  len.setAttribute("aria-valuenow", v); },
+      min: secs ? 5 : 1, max: secs ? 1800 : 64, step: secs ? 5 : 1, px: 3,
+      commit: saveTemplate
+    });
+
+    const unit = mini(secs ? "sec" : "bars", () => {
+      st.len.u = secs ? "bars" : "sec";
+      st.len.n = secs ? 8 : 60;      // a sensible default in the new unit
+      saveTemplate(); renderSteps();
+    });
+    const up = mini("↑", () => moveStep(i, -1));
+    const dn = mini("↓", () => moveStep(i,  1));
+    const rm = mini("×", () => { tplSel.steps.splice(i,1); saveTemplate(); renderTemplates(); });
+
+    for (const el of [n, lab, len, unit, up, dn, rm]) row.appendChild(el);
+    host.appendChild(row);
+  });
+}
+
+function renderTemplates(){
+  const list = Store.templates();
+  const pk = $("tplPick"); pk.innerHTML = "";
+
+  const off = chip("sm", !tplSel);
+  off.textContent = "off";
+  off.onclick = () => { tplSel = null; tplIdx = -1; renderTemplates(); };
+  pk.appendChild(off);
+
+  for (const t of list){
+    const b = chip("sm", !!tplSel && tplSel.id === t.id);
+    b.innerHTML = t.name + '<span class="ct">' + t.steps.length + '</span>';
+    b.onclick = () => { tplSel = t; tplIdx = -1; renderTemplates(); };
+    pk.appendChild(b);
+  }
+
+  const add = chip("sm", false);
+  add.textContent = "+ new";
+  add.onclick = () => {
+    const name = prompt("Name this template", "Drill " + (list.length + 1));
+    if (!name || !name.trim()) return;
+    tplSel = { id:"t" + Date.now().toString(36), name:name.trim().slice(0,40), steps:[] };
+    saveTemplate(); renderTemplates();
+  };
+  pk.appendChild(add);
+
+  $("tplBody").hidden = !tplSel;
+  $("tplHint").textContent = tplIdx >= 0
+    ? "step " + (tplIdx+1) + " of " + tplSel.steps.length
+    : (tplSel ? tplSel.steps.length + " steps" : "runs drills back to back");
+
+  renderSteps();
+
+  const ind = $("tStep");
+  const show = !!tplSel && tplSel.steps.length > 0;
+  ind.hidden = !show;
+  if (show) ind.querySelector("b").textContent =
+    (tplIdx >= 0 ? tplIdx + 1 : "–") + "/" + tplSel.steps.length;
+}
+
+$("tplAdd").onclick = () => {
+  if (!tplSel) return;
+  tplSel.steps.push(snapshotStep());
+  saveTemplate(); renderTemplates();
+};
+
+$("tplRename").onclick = () => {
+  if (!tplSel) return;
+  const name = prompt("Rename template", tplSel.name);
+  if (!name || !name.trim()) return;
+  tplSel.name = name.trim().slice(0,40);
+  saveTemplate(); renderTemplates();
+};
+
+$("tplDel").onclick = () => {
+  if (!tplSel) return;
+  if (!confirm('Delete "' + tplSel.name + '" and its steps?')) return;
+  Store.dropTemplate(tplSel.id);
+  tplSel = null; tplIdx = -1;
+  renderTemplates();
+};
 
 $("tRamp").onclick = () => {
   cfg.ramp.on = !cfg.ramp.on;
@@ -1330,7 +1564,7 @@ $("stress").onchange = e => {
   } else { jank = 0; }
 };
 
-renderPickers(); renderGrid(); renderBars(); renderTempo();
+renderPickers(); renderGrid(); renderBars(); renderTempo(); renderTemplates();
 buildPads(); resize(); stats();
 
 /* ============================== install ============================== */

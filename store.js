@@ -34,8 +34,40 @@ const Store = (() => {
     }
   }
 
+  /* Templates are a different kind of thing from sessions — authored, edited and
+     deleted, rather than appended and never touched — so they get their own key
+     and their own accessors rather than sharing a shape they do not fit. */
+  const TKEY = "millitap.templates.v1";
+
+  function readT(){
+    try {
+      const raw = localStorage.getItem(TKEY);
+      const a = raw ? JSON.parse(raw) : [];
+      return Array.isArray(a) ? a : [];
+    } catch (e) { return []; }
+  }
+  function writeT(a){
+    try { localStorage.setItem(TKEY, JSON.stringify(a)); return true; }
+    catch (e) { return false; }
+  }
+
   return {
     all: read,
+
+    templates: readT,
+
+    /* Upsert by id, so editing a template in place and creating one are the
+       same call and a half-edited template can never fork into two. */
+    putTemplate(t){
+      const a = readT();
+      const i = a.findIndex(x => x.id === t.id);
+      if (i < 0) a.push(t); else a[i] = t;
+      return writeT(a);
+    },
+
+    dropTemplate(id){
+      return writeT(readT().filter(t => t.id !== id));
+    },
 
     add(rec){
       const a = read();
