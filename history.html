@@ -29,6 +29,27 @@
     --r1:6px; --r2:10px; --r3:14px;
     --fig: ui-monospace, "SF Mono", Menlo, monospace;
     --ui: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+
+    /* Chart ink and the tempo ramp are tokens too, so print can restate them
+       without the drawing code knowing which medium it is on. */
+    --c-grid:rgba(147,164,183,.14);
+    --c-axis:rgba(147,164,183,.62);
+    --t0:#5C7089; --t1:#7E90A6; --t2:#9FB0C3; --t3:#C1CEDB; --t4:#E4EBF4;
+  }
+
+  /* Paper is a different medium, not an inverted screen. The dark hues fail
+     badly on white — green lands at 1.94:1 — so these are the same four
+     meanings re-stepped for it, validated all-pairs at CVD ΔE 9.3 deutan with
+     every slot clearing 3:1. The ramp inverts because on white the light end
+     is the one that has to work hard. */
+  @media print{
+    :root{
+      --ground:#FFFFFF; --panel:#FFFFFF; --panel-hi:#F1F4F7; --rule:#C7D0DA;
+      --ink:#111A22; --ink-dim:#3F4E5D; --ink-mute:#5A6879;
+      --rush:#9E6408; --drag:#00618E; --true:#44A061; --miss:#97243E;
+      --c-grid:#DDE4EB; --c-axis:#6A7887;
+      --t0:#A8B4C0; --t1:#8593A1; --t2:#647485; --t3:#465768; --t4:#2A3A49;
+    }
   }
   *{box-sizing:border-box;margin:0;padding:0}
   [hidden]{display:none!important}
@@ -82,7 +103,29 @@
   .hint{font-family:var(--fig);font-size:10px;font-weight:400;letter-spacing:0;
     text-transform:none;color:var(--ink-mute);opacity:.8}
   .chart{position:relative;width:100%}
-  .chart svg{display:block;width:100%}
+  .chart svg{display:block;width:100%;font-family:var(--fig)}
+  /* Marks wear classes rather than inline colours, so a media query can restate
+     the tokens and the whole chart follows without being redrawn. */
+  .gl{stroke:var(--c-grid);stroke-width:1}
+  .ax{fill:var(--c-axis);font-size:9px}
+  .zero{stroke:var(--true);stroke-width:1.5;stroke-opacity:.55}
+  .trend{fill:none;stroke:var(--ink-dim);stroke-width:2;stroke-opacity:.4;
+    stroke-linejoin:round}
+  .band{fill:var(--true);fill-opacity:.08}
+  .bandlab{fill:var(--true);fill-opacity:.7;font-size:9px}
+  .ring{stroke:var(--panel);stroke-width:2}
+  .m-rush{fill:var(--rush)} .m-drag{fill:var(--drag)}
+  .m-true{fill:var(--true)} .m-dim{fill:var(--ink-dim)}
+  .w-rush{stroke:var(--rush)} .w-drag{stroke:var(--drag)} .w-true{stroke:var(--true)}
+  .whisk{stroke-width:4;stroke-opacity:.34;stroke-linecap:round}
+  .missx{stroke:var(--miss);stroke-width:2;stroke-linecap:round}
+  .t0{fill:var(--t0)} .t1{fill:var(--t1)} .t2{fill:var(--t2)}
+  .t3{fill:var(--t3)} .t4{fill:var(--t4)}
+  .sw.k-rush{background:var(--rush)} .sw.k-drag{background:var(--drag)}
+  .sw.k-true{background:var(--true)} .sw.k-miss{background:var(--miss)}
+  .ramp i.t0{background:var(--t0)} .ramp i.t1{background:var(--t1)}
+  .ramp i.t2{background:var(--t2)} .ramp i.t3{background:var(--t3)}
+  .ramp i.t4{background:var(--t4)}
   .none{font-size:12px;color:var(--ink-mute);padding:var(--sp5) 2px}
 
   .legend{display:flex;flex-wrap:wrap;gap:var(--sp3) var(--sp4);padding-top:10px;
@@ -115,6 +158,24 @@
   .danger{color:var(--miss);border-color:rgba(194,86,107,.45);background:none;
     box-shadow:none;justify-self:start}
   .note{font-size:12px;line-height:1.6;color:var(--ink-dim);max-width:62ch}
+  .exportbar{display:flex;flex-wrap:wrap;gap:var(--sp2)}
+  .rhead{display:none}
+
+  @media print{
+    @page{margin:14mm 12mm}
+    body{background:#fff!important;background-image:none!important;
+      color:var(--ink);padding:0}
+    .topbar,.pick,.exportbar,#clearBtn,#tableToggle,#tip{display:none!important}
+    .wrap{max-width:none;margin:0;padding:0;gap:11px}
+    .rhead{display:block}
+    .rhead h2{font-size:15px;font-weight:600;letter-spacing:.01em}
+    .rhead p{font-size:10px;font-family:var(--fig);color:var(--ink-mute);margin-top:3px}
+    /* A chart split across a page break is worse than a shorter page. */
+    .card,.tile{box-shadow:none;border:1px solid var(--rule);
+      break-inside:avoid;page-break-inside:avoid}
+    .tiles{gap:6px}
+    a{color:inherit}
+  }
 </style>
 </head>
 <body>
@@ -148,7 +209,14 @@
   </div>
 
   <div id="content" hidden>
+    <div class="rhead" id="rhead"></div>
     <div class="pick" id="bucketPick"></div>
+    <div class="exportbar">
+      <button id="pdfBtn">Save as PDF</button>
+      <button id="exportBtn">Export data</button>
+      <button id="importBtn">Import backup</button>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
+    </div>
     <div class="tiles" id="tiles"></div>
 
     <section class="card">
@@ -194,16 +262,14 @@ const $ = id => document.getElementById(id);
 const NS = "http://www.w3.org/2000/svg";
 const el = (t,a) => { const n=document.createElementNS(NS,t);
   for (const k in a) n.setAttribute(k,a[k]); return n; };
-const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-
-/* Sequential ramp for tempo. Neutral on purpose: amber, blue and green already
-   mean rushing, dragging and on-the-beat everywhere else in the app, and reusing
-   any of them for a second variable would make the colour ambiguous. */
-const TEMPO = ["#5C7089","#7E90A6","#9FB0C3","#C1CEDB","#E4EBF4"];
+/* Marks carry class names, not resolved colours. The stylesheet owns which hue
+   a class means, so @media print restates the tokens once and every chart
+   follows — no re-render, no toggling, nothing to unwind afterwards. */
+const RAMP = 5;   // tempo ramp steps, classes t0..t4
 
 const fmtDate = t => new Date(t).toLocaleDateString(undefined,{day:"numeric",month:"short"});
 const ms = n => (n>0?"+":n<0?"−":"") + Math.abs(n).toFixed(1);
-const devColour = d => d < -4 ? css("--rush") : d > 4 ? css("--drag") : css("--true");
+const devTone = d => d < -4 ? "rush" : d > 4 ? "drag" : "true";
 
 let buckets = [], sel = null;
 
@@ -232,27 +298,22 @@ function frame(host, h, pad){
   return {svg, w, h, L:pad.l, R:w-pad.r, T:pad.t, B:h-pad.b};
 }
 function gridLine(f, y, label){
-  f.svg.appendChild(el("line",{x1:f.L,y1:y,x2:f.R,y2:y,
-    stroke:"rgba(138,155,175,.13)","stroke-width":1}));
+  f.svg.appendChild(el("line",{x1:f.L,y1:y,x2:f.R,y2:y,"class":"gl"}));
   if (label != null){
-    const t = el("text",{x:f.L-6,y:y+3,"text-anchor":"end",
-      fill:"rgba(138,155,175,.62)","font-size":9,"font-family":css("--fig")});
+    const t = el("text",{x:f.L-6,y:y+3,"text-anchor":"end","class":"ax"});
     t.textContent = label; f.svg.appendChild(t);
   }
 }
 function xLabel(f, x, s){
-  const t = el("text",{x,y:f.B+15,"text-anchor":"middle",
-    fill:"rgba(138,155,175,.62)","font-size":9,"font-family":css("--fig")});
+  const t = el("text",{x,y:f.B+15,"text-anchor":"middle","class":"ax"});
   t.textContent = s; f.svg.appendChild(t);
 }
-function dot(f, x, y, fill, title){
-  const c = el("circle",{cx:x,cy:y,r:4.5,fill,
-    stroke:css("--panel"),"stroke-width":2});   // 2px surface ring so overlaps read
-  f.svg.appendChild(c);
+function dot(f, x, y, tone, title){
+  // ring is a 2px surface-coloured stroke so overlapping dots stay countable
+  f.svg.appendChild(el("circle",{cx:x,cy:y,r:4.5,"class":tone+" ring"}));
   const hit = el("circle",{cx:x,cy:y,r:12,fill:"transparent"});  // touch target
   f.svg.appendChild(hit);
   bindTip(hit, title);
-  return c;
 }
 function none(host, msg){ host.innerHTML = '<div class="none">'+msg+'</div>'; }
 
@@ -265,8 +326,8 @@ function chartSpread(rows){
   const hi = Math.max(12, Math.max(...vals)*1.15);
   const bpms = rows.map(r => r.bpm);
   const lo = Math.min(...bpms), hb = Math.max(...bpms);
-  const step = b => TEMPO[hb===lo ? TEMPO.length-1
-    : Math.min(TEMPO.length-1, Math.floor((b-lo)/(hb-lo+1e-9)*TEMPO.length))];
+  const step = b => "t" + (hb===lo ? RAMP-1
+    : Math.min(RAMP-1, Math.floor((b-lo)/(hb-lo+1e-9)*RAMP)));
   const X = i => rows.length===1 ? (f.L+f.R)/2
     : f.L + i/(rows.length-1)*(f.R-f.L);
   const Y = v => f.B - v/hi*(f.B-f.T);
@@ -275,9 +336,7 @@ function chartSpread(rows){
 
   if (rows.length > 1){
     f.svg.appendChild(el("polyline",{
-      points: vals.map((v,i)=>X(i)+","+Y(v)).join(" "),
-      fill:"none", stroke:css("--ink-dim"), "stroke-width":2,
-      "stroke-opacity":.42, "stroke-linejoin":"round"}));
+      points: vals.map((v,i)=>X(i)+","+Y(v)).join(" "), "class":"trend"}));
   }
   rows.forEach((r,i) => {
     const sd = vals[i];
@@ -288,9 +347,11 @@ function chartSpread(rows){
   xLabel(f, f.L, fmtDate(rows[0].t));
   if (rows.length > 1) xLabel(f, f.R, fmtDate(rows[rows.length-1].t));
 
+  let sw = "";
+  for (let i=0;i<RAMP;i++) sw += '<i class="t'+i+'"></i>';
   $("l1").innerHTML =
-    '<span>slow <span class="ramp">'+TEMPO.map(c=>'<i style="background:'+c+'"></i>').join("")+
-    '</span> fast</span><span>'+lo+'–'+hb+' bpm</span>';
+    '<span>slow <span class="ramp">'+sw+'</span> fast</span>'+
+    '<span>'+lo+'–'+hb+' bpm</span>';
 }
 
 /* ---------------------------------------------------------- 2 · bias / session */
@@ -307,28 +368,24 @@ function chartBias(rows){
      alone. Drawing it as expected territory stops the chart from teaching the
      opposite of what the app teaches. */
   f.svg.appendChild(el("rect",{x:f.L,y:Y(-20),width:f.R-f.L,height:Y(-50)-Y(-20),
-    fill:css("--true"),"fill-opacity":.07}));
-  const bl = el("text",{x:f.L+5,y:Y(-35)+3,fill:"rgba(127,203,143,.6)",
-    "font-size":9,"font-family":css("--fig")});
+    "class":"band"}));
+  const bl = el("text",{x:f.L+5,y:Y(-35)+3,"class":"bandlab"});
   bl.textContent = "normal early"; f.svg.appendChild(bl);
 
   for (const v of [span/2, -span/2]) gridLine(f, Y(v), Math.round(v));
-  f.svg.appendChild(el("line",{x1:f.L,y1:Y(0),x2:f.R,y2:Y(0),
-    stroke:css("--true"),"stroke-width":1.5,"stroke-opacity":.55}));
+  f.svg.appendChild(el("line",{x1:f.L,y1:Y(0),x2:f.R,y2:Y(0),"class":"zero"}));
 
   if (rows.length > 1){
     f.svg.appendChild(el("polyline",{
-      points: means.map((v,i)=>X(i)+","+Y(v)).join(" "),
-      fill:"none", stroke:css("--ink-dim"), "stroke-width":2,
-      "stroke-opacity":.34, "stroke-linejoin":"round"}));
+      points: means.map((v,i)=>X(i)+","+Y(v)).join(" "), "class":"trend"}));
   }
-  rows.forEach((r,i) => dot(f, X(i), Y(means[i]), devColour(means[i]),
+  rows.forEach((r,i) => dot(f, X(i), Y(means[i]), "m-"+devTone(means[i]),
     "<b>"+ms(means[i])+" ms average</b><br>"+r.bpm+" bpm · "+r.n+" taps<br>"+fmtDate(r.t)));
 
   $("l2").innerHTML =
-    '<span><i class="sw" style="background:'+css("--rush")+'"></i>rushing</span>'+
-    '<span><i class="sw" style="background:'+css("--true")+'"></i>on the beat</span>'+
-    '<span><i class="sw" style="background:'+css("--drag")+'"></i>dragging</span>';
+    '<span><i class="sw k-rush"></i>rushing</span>'+
+    '<span><i class="sw k-true"></i>on the beat</span>'+
+    '<span><i class="sw k-drag"></i>dragging</span>';
 }
 
 /* ------------------------------------------------------- 3 · by bar position */
@@ -354,8 +411,7 @@ function chartPositions(rows){
   const Y = v => (f.T+f.B)/2 - v/span*((f.B-f.T)/2);
 
   for (const v of [span/2, -span/2]) gridLine(f, Y(v), Math.round(v));
-  f.svg.appendChild(el("line",{x1:f.L,y1:Y(0),x2:f.R,y2:Y(0),
-    stroke:css("--true"),"stroke-width":1.5,"stroke-opacity":.55}));
+  f.svg.appendChild(el("line",{x1:f.L,y1:Y(0),x2:f.R,y2:Y(0),"class":"zero"}));
 
   /* Mirrors the scheduler's rule: onsets without an explicit voice alternate
      across the pads by index, so with two pads the odd onsets are all one hand. */
@@ -375,7 +431,7 @@ function chartPositions(rows){
        pattern does not contain — the weakness finder hiding the weakness. */
     if (!s.n){
       empty++;
-      const r = 5, g = el("g",{stroke:css("--miss"),"stroke-width":2,"stroke-linecap":"round"});
+      const r = 5, g = el("g",{"class":"missx"});
       g.appendChild(el("line",{x1:x-r,y1:Y(0)-r,x2:x+r,y2:Y(0)+r}));
       g.appendChild(el("line",{x1:x+r,y1:Y(0)-r,x2:x-r,y2:Y(0)+r}));
       f.svg.appendChild(g);
@@ -386,18 +442,18 @@ function chartPositions(rows){
       return;
     }
 
-    const col = devColour(s.mean);
+    const tone = devTone(s.mean);
     f.svg.appendChild(el("line",{x1:x,y1:Y(s.mean-s.sd),x2:x,y2:Y(s.mean+s.sd),
-      stroke:col,"stroke-width":4,"stroke-opacity":.34,"stroke-linecap":"round"}));
-    dot(f, x, Y(s.mean), col,
+      "class":"whisk w-"+tone}));
+    dot(f, x, Y(s.mean), "m-"+tone,
       "<b>"+name(i)+"</b><br>"+ms(s.mean)+" ms average<br>"+
       s.sd.toFixed(1)+" ms spread<br>"+s.n+" taps");
   });
 
   $("l3").innerHTML =
-    '<span><i class="sw" style="background:'+css("--rush")+'"></i>rushes here</span>'+
-    '<span><i class="sw" style="background:'+css("--drag")+'"></i>drags here</span>'+
-    (empty ? '<span><i class="sw" style="background:'+css("--miss")+'"></i>never hit</span>' : '')+
+    '<span><i class="sw k-rush"></i>rushes here</span>'+
+    '<span><i class="sw k-drag"></i>drags here</span>'+
+    (empty ? '<span><i class="sw k-miss"></i>never hit</span>' : '')+
     '<span>pooled across '+rows.length+' session'+(rows.length===1?"":"s")+'</span>';
 }
 
@@ -413,7 +469,7 @@ function chartTempo(rows){
   const Y = v => f.B - v/top*(f.B-f.T);
 
   for (let g=0; g<=3; g++){ const v=top*g/3; gridLine(f, Y(v), Math.round(v)); }
-  for (const p of pts) dot(f, X(p.b), Y(p.sd), css("--ink-dim"),
+  for (const p of pts) dot(f, X(p.b), Y(p.sd), "m-dim",
     "<b>"+p.sd.toFixed(1)+" ms spread</b><br>"+p.b+" bpm · "+p.r.n+" taps<br>"+fmtDate(p.r.t));
   xLabel(f, f.L, lo+" bpm");
   if (hi !== lo) xLabel(f, f.R, hi+" bpm");
@@ -452,6 +508,12 @@ function table(rows){
 function renderCharts(){
   const b = buckets.find(x => x.key === sel);
   if (!b) return;
+  const first = fmtDate(b.rows[0].t), last = fmtDate(b.rows[b.rows.length-1].t);
+  $("rhead").innerHTML =
+    "<h2>millitap · " + b.label + "</h2><p>" +
+    b.rows.length + " session" + (b.rows.length===1?"":"s") + " · " +
+    (first===last ? first : first + " – " + last) +
+    " · printed " + fmtDate(Date.now()) + "</p>";
   tiles(b.rows);
   chartSpread(b.rows);
   chartBias(b.rows);
@@ -488,6 +550,62 @@ $("tableToggle").onclick = () => {
   w.hidden = !open;
   $("tableToggle").setAttribute("aria-expanded", String(open));
   $("tableToggle").textContent = open ? "Hide data table" : "Show data table";
+};
+
+/* Print rather than a PDF library. The browser already has a PDF engine, the
+   text stays vector, and the alternative is ~200KB of dependency in an app whose
+   first principle is not having any — and which has to keep working offline. */
+$("pdfBtn").onclick = () => {
+  const w = $("tableWrap"), was = w.hidden;
+  w.hidden = false;                       // the table belongs in a printed report
+  const back = () => { w.hidden = was; removeEventListener("afterprint", back); };
+  addEventListener("afterprint", back);
+  print();
+  // Safari does not always fire afterprint; this only restores a toggle, so a
+  // late backstop is harmless either way.
+  setTimeout(back, 30000);
+};
+
+function download(name, text, type){
+  const url = URL.createObjectURL(new Blob([text], {type}));
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+$("exportBtn").onclick = () => {
+  const d = new Date(), p = n => String(n).padStart(2,"0");
+  const stamp = d.getFullYear() + p(d.getMonth()+1) + p(d.getDate());
+  download("millitap-sessions-" + stamp + ".json",
+    JSON.stringify({ app:"millitap", schema:1,
+      exported:new Date().toISOString(), sessions:Store.all() }),
+    "application/json");
+};
+
+$("importBtn").onclick = () => $("importFile").click();
+
+$("importFile").onchange = e => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";                    // so re-picking the same file still fires
+  if (!file) return;
+  const r = new FileReader();
+  r.onerror = () => alert("Could not read that file.");
+  r.onload = () => {
+    let rows;
+    try {
+      const parsed = JSON.parse(r.result);
+      // Accept both the wrapped export and a bare array of sessions.
+      rows = Array.isArray(parsed) ? parsed : parsed && parsed.sessions;
+    } catch (err) { rows = null; }
+    if (!Array.isArray(rows)) return alert("That file is not a millitap backup.");
+    const res = Store.addMany(rows);
+    if (!res.ok) return alert("Import failed — storage may be full.");
+    alert("Imported " + res.added + " session" + (res.added===1?"":"s") +
+      (res.skipped ? ", skipped " + res.skipped + " already present or unreadable." : "."));
+    boot();
+  };
+  r.readAsText(file);
 };
 
 $("clearBtn").onclick = () => {

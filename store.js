@@ -46,6 +46,25 @@ const Store = (() => {
 
     clear(){ try { localStorage.removeItem(KEY); } catch (e) {} },
 
+    /* Import merges rather than replaces, and dedupes on timestamp+key, so
+       restoring the same backup twice is a no-op instead of doubling every
+       session. One read and one write for the whole file — add() per row would
+       re-serialise the entire store on each one. */
+    addMany(rows){
+      const a = read();
+      const seen = new Set(a.map(x => x.t + "|" + x.key));
+      let added = 0, skipped = 0;
+      for (const r of rows){
+        if (!r || typeof r.t !== "number" || !r.key || !Array.isArray(r.c)){ skipped++; continue; }
+        const id = r.t + "|" + r.key;
+        if (seen.has(id)){ skipped++; continue; }
+        seen.add(id); a.push(r); added++;
+      }
+      a.sort((x,y) => x.t - y.t);
+      if (a.length > MAX) a.splice(0, a.length - MAX);
+      return { added, skipped, ok: added ? write(a) : true };
+    },
+
     /* Grouped by bucket, each bucket's rows oldest-first, buckets ordered by
        most recent activity so the one you just drilled is first. */
     buckets(){
