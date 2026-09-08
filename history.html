@@ -71,6 +71,9 @@
   .back{display:flex;align-items:center;gap:5px;font-size:11px;letter-spacing:.06em;
     text-transform:uppercase;color:var(--ink-mute);padding:var(--sp1) 2px}
   .back svg{width:14px;height:14px;fill:currentColor}
+  .navs{justify-self:end;display:flex;align-items:center;gap:2px}
+  .navlink{display:flex;padding:var(--sp1);color:var(--ink-mute)}
+  .navlink svg{width:17px;height:17px;fill:currentColor;display:block}
 
   .wrap{max-width:720px;margin:0 auto;display:grid;gap:var(--sp2);padding-top:var(--sp4)}
 
@@ -195,7 +198,14 @@
     </svg>
     <h1>history</h1>
   </span>
-  <span></span>
+  <span class="navs">
+    <a class="navlink" href="templates.html" aria-label="Drill templates">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 5h13v2H3zM3 10h13v2H3zM3 15h8v2H3z"/>
+        <path d="M17.4 13.6v2.9h-2.9v2h2.9v2.9h2v-2.9h2.9v-2h-2.9v-2.9z"/>
+      </svg>
+    </a>
+  </span>
 </header>
 
 <div class="wrap">
@@ -585,13 +595,13 @@ function download(name, text, type){
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
+/* One file carries sessions and templates both, because "back up millitap" is
+   the thing a person wants. Same file the templates page reads and writes. */
 $("exportBtn").onclick = () => {
   const d = new Date(), p = n => String(n).padStart(2,"0");
   const stamp = d.getFullYear() + p(d.getMonth()+1) + p(d.getDate());
-  download("millitap-sessions-" + stamp + ".json",
-    JSON.stringify({ app:"millitap", schema:1,
-      exported:new Date().toISOString(), sessions:Store.all() }),
-    "application/json");
+  download("millitap-backup-" + stamp + ".json",
+    JSON.stringify(Store.exportAll()), "application/json");
 };
 
 $("importBtn").onclick = () => $("importFile").click();
@@ -603,17 +613,15 @@ $("importFile").onchange = e => {
   const r = new FileReader();
   r.onerror = () => alert("Could not read that file.");
   r.onload = () => {
-    let rows;
-    try {
-      const parsed = JSON.parse(r.result);
-      // Accept both the wrapped export and a bare array of sessions.
-      rows = Array.isArray(parsed) ? parsed : parsed && parsed.sessions;
-    } catch (err) { rows = null; }
-    if (!Array.isArray(rows)) return alert("That file is not a millitap backup.");
-    const res = Store.addMany(rows);
+    let parsed;
+    try { parsed = JSON.parse(r.result); } catch (err) { parsed = null; }
+    const res = parsed && Store.importAll(parsed);
+    if (!res) return alert("That file is not a millitap backup.");
     if (!res.ok) return alert("Import failed — storage may be full.");
-    alert("Imported " + res.added + " session" + (res.added===1?"":"s") +
-      (res.skipped ? ", skipped " + res.skipped + " already present or unreadable." : "."));
+    alert("Imported " + res.sessions + " session" + (res.sessions===1?"":"s") +
+      " and " + res.templates + " template" + (res.templates===1?"":"s") +
+      (res.replaced ? ", replacing " + res.replaced : "") +
+      (res.skipped ? ". Skipped " + res.skipped + " already present." : "."));
     boot();
   };
   r.readAsText(file);

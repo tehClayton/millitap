@@ -67,7 +67,7 @@
     flex:0 0 auto;padding:0 var(--sp1)}
   .brand{display:flex;align-items:center;gap:var(--sp2)}
   .topbar h1{font-size:13px;font-weight:600;color:var(--ink);letter-spacing:.05em}
-  .histlink{justify-self:end;display:flex;padding:var(--sp1);color:var(--ink-mute)}
+  .histlink{display:flex;padding:var(--sp1);color:var(--ink-mute)}
   .histlink svg{width:17px;height:17px;fill:currentColor;display:block}
   .mark{width:19px;height:19px;flex:0 0 auto}
   .mark line{stroke:var(--true);stroke-width:1.7;stroke-linecap:round}
@@ -225,22 +225,12 @@
   .advbtn[aria-expanded="true"]{color:var(--ink)}
   .advbtn[aria-expanded="true"] .chev{transform:rotate(90deg)}
   #advBody{display:grid;gap:var(--sp3);padding-top:var(--sp3)}
-  #tplBody{display:grid;gap:var(--sp3);padding-top:var(--sp1)}
-  .steps{display:grid;gap:2px}
-  .step{display:flex;align-items:center;gap:var(--sp2);padding:3px 5px;
-    border-radius:var(--r1)}
-  .step.now{background:rgba(127,203,143,.09)}
-  .step.now .sd{color:var(--ink)}
-  .sn{font-family:var(--fig);font-size:11px;color:var(--ink-mute);min-width:1.5ch}
-  .sd{flex:1;min-width:0;font-size:12px;color:var(--ink-dim);
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .slen{min-width:50px;padding:4px 7px;gap:2px}
-  .slen b{font-size:15px}
-  .mini{padding:5px 7px;font-size:11px;min-width:28px;line-height:1;
-    border-radius:var(--r1);color:var(--ink-dim);
-    background:linear-gradient(var(--raise-a),var(--raise-b));
-    border:1px solid var(--rule);box-shadow:inset 0 1px 0 rgba(255,255,255,.055)}
-  .ct{color:var(--ink-mute);font-family:var(--fig);font-size:11px;margin-left:6px}
+  .navs{justify-self:end;display:flex;align-items:center;gap:2px}
+  #flash{position:fixed;left:50%;transform:translateX(-50%);
+    top:calc(var(--sp4) + env(safe-area-inset-top));
+    background:var(--panel-hi);border:1px solid var(--true);color:var(--ink);
+    padding:9px 15px;border-radius:var(--r1);font-size:12px;z-index:30;
+    box-shadow:0 10px 28px rgba(0,0,0,.5);pointer-events:none}
 
   .pick{display:flex;flex-wrap:wrap;gap:var(--sp2)}
   .chip{padding:8px 12px;font-size:12px;border-radius:var(--r1);
@@ -309,6 +299,13 @@
     </svg>
     <h1>millitap</h1>
   </span>
+  <span class="navs">
+  <a class="histlink" href="templates.html" aria-label="Drill templates">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 5h13v2H3zM3 10h13v2H3zM3 15h8v2H3z"/>
+      <path d="M17.4 13.6v2.9h-2.9v2h2.9v2.9h2v-2.9h2.9v-2h-2.9v-2.9z"/>
+    </svg>
+  </a>
   <a class="histlink" href="history.html" aria-label="Practice history">
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <rect x="3" y="13" width="4.6" height="8" rx="1.2"/>
@@ -316,6 +313,7 @@
       <rect x="16.4" y="10" width="4.6" height="11" rx="1.2"/>
     </svg>
   </a>
+  </span>
 </header>
 
 <div class="readout">
@@ -352,6 +350,12 @@
       <span class="tval live" id="tStep" hidden><b>–/–</b><i>step</i></span>
     </div>
   </div>
+  <button id="tAdd" class="iconbtn" type="button" aria-label="Add these settings to a template">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 5h13v2H3zM3 10h13v2H3zM3 15h8v2H3z"/>
+      <path d="M17.4 13.6v2.9h-2.9v2h2.9v2.9h2v-2.9h2.9v-2h-2.9v-2.9z"/>
+    </svg>
+  </button>
   <button id="clear">Clear</button>
   <button id="gear" class="iconbtn" aria-label="Settings" aria-expanded="false">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a7.07 7.07 0 0 0 .06-.94 7.07 7.07 0 0 0-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.12.22.38.3.6.22l2.39-.96c.49.38 1.03.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.48 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
@@ -400,19 +404,6 @@
     <div>
       <h2>Count-in <span class="hint">bars</span></h2>
       <div class="pick" id="countPick"></div>
-    </div>
-  </div>
-
-  <div class="sect">
-    <h2>Drill template <span class="hint" id="tplHint"></span></h2>
-    <div class="pick" id="tplPick"></div>
-    <div id="tplBody" hidden>
-      <div class="steps" id="tplSteps"></div>
-      <div class="pick">
-        <button class="chip sm" type="button" id="tplAdd">add current settings</button>
-        <button class="chip sm" type="button" id="tplRename">rename</button>
-        <button class="chip sm" type="button" id="tplDel">delete</button>
-      </div>
     </div>
   </div>
 
@@ -467,9 +458,11 @@
 
 <div class="pads" id="pads"></div>
 
+<div id="flash" hidden></div>
 <div id="toast">Updated — tap to reload</div>
 
 <script src="store.js"></script>
+<script src="ui.js"></script>
 <script>
 "use strict";
 
@@ -1275,49 +1268,9 @@ function renderTempo(){
   $("tRamp").setAttribute("aria-pressed", String(on));
 }
 
-/* Generic, so a template's step-length field behaves exactly like a tempo field
-   instead of inventing a second gesture for the same job. */
-function scrubEl(el, f){
-  const apply = v => f.set(Math.max(f.min, Math.min(f.max, v)));
-  let base = 0, y0 = 0, live = false;
-
-  el.addEventListener("pointerdown", e => {
-    live = true; base = f.get(); y0 = e.clientY;
-    el.setPointerCapture(e.pointerId);
-    el.classList.add("drag");
-    e.preventDefault();
-  });
-
-  el.addEventListener("pointermove", e => {
-    if (!live) return;
-    // Screen y grows downward, so subtracting puts "up" on the positive side.
-    apply(base + Math.round((y0 - e.clientY) / f.px) * f.step);
-  });
-
-  const end = e => {
-    if (!live) return;
-    live = false;
-    el.classList.remove("drag");
-    if (el.hasPointerCapture && el.hasPointerCapture(e.pointerId))
-      el.releasePointerCapture(e.pointerId);
-    if (f.commit) f.commit();
-  };
-  el.addEventListener("pointerup", end);
-  el.addEventListener("pointercancel", end);
-
-  /* A drag is not reachable from a keyboard, and the slider this replaced was.
-     role=spinbutton means the arrows are what a screen reader will announce. */
-  el.addEventListener("keydown", e => {
-    const up = e.key==="ArrowUp"   || e.key==="PageUp";
-    const dn = e.key==="ArrowDown" || e.key==="PageDown";
-    if (!up && !dn) return;
-    e.preventDefault();
-    const mult = (e.key==="PageUp" || e.key==="PageDown") ? 10 : 1;
-    apply(f.get() + (up ? 1 : -1) * f.step * mult);
-    if (f.commit) f.commit();
-  });
-}
-
+/* scrubEl lives in ui.js: the templates page needs the same gesture on its
+   step-length fields, and two copies of a pointer-capture handler is how they
+   end up behaving differently. */
 for (const id in TF)
   scrubEl($(id), Object.assign({}, TF[id],
     { set: v => setField(id, v), commit: commitTempo }));
@@ -1335,8 +1288,6 @@ for (const id in TF)
 let tplSel = null;   // the chosen template, or null
 let tplIdx = -1;     // step currently playing, -1 when not running one
 
-const saveTemplate = () => { if (tplSel) Store.putTemplate(tplSel); };
-
 function stepLabel(st){
   const f = st.feel && FEELS.find(x => x.id === st.feel);
   const n = NOTES.find(x => x.id === st.note);
@@ -1345,14 +1296,19 @@ function stepLabel(st){
 }
 
 function snapshotStep(){
-  return {
+  const st = {
     len:{ u:"bars", n:8 },
     bpm: cfg.bpm,
     meter: cfg.meter.id, note: cfg.note.id, feel: cfg.feel ? cfg.feel.id : null,
+    beats: cfg.pattern.beats,
     pads: cfg.pads, padMode: cfg.padMode, countIn: cfg.countIn,
     click: cfg.click.slice(), bars: cfg.bars.slice(),
     ramp: { on:cfg.ramp.on, to:cfg.ramp.to, secs:cfg.ramp.secs }
   };
+  /* Label and bar count are baked in at capture so the templates page can render
+     a step without importing the meter, note and feel tables that name it. */
+  st.label = stepLabel(st);
+  return st;
 }
 
 function applyStep(st){
@@ -1395,124 +1351,48 @@ function tickTemplate(){
   renderTemplates();
 }
 
-function moveStep(i, d){
-  const s = tplSel.steps, j = i + d;
-  if (j < 0 || j >= s.length) return;
-  const t = s[i]; s[i] = s[j]; s[j] = t;
-  saveTemplate(); renderTemplates();
-}
-
-function mini(text, fn){
-  const b = document.createElement("button");
-  b.type = "button"; b.className = "mini"; b.textContent = text;
-  b.onclick = fn;
-  return b;
-}
-
-function renderSteps(){
-  const host = $("tplSteps"); host.innerHTML = "";
-  if (!tplSel) return;
-  tplSel.steps.forEach((st, i) => {
-    const row = document.createElement("div");
-    row.className = "step" + (i === tplIdx ? " now" : "");
-
-    const n = document.createElement("span");
-    n.className = "sn"; n.textContent = String(i+1);
-
-    const lab = document.createElement("span");
-    lab.className = "sd"; lab.textContent = stepLabel(st);
-
-    const len = document.createElement("button");
-    len.type = "button"; len.className = "tval slen";
-    len.setAttribute("role", "spinbutton");
-    len.setAttribute("aria-label", "Step " + (i+1) + " length");
-    len.setAttribute("aria-valuenow", st.len.n);
-    len.innerHTML = "<b>" + st.len.n + "</b><i>" + st.len.u + "</i>";
-    const secs = st.len.u === "sec";
-    scrubEl(len, {
-      get: () => st.len.n,
-      set: v => { st.len.n = v;
-                  len.querySelector("b").textContent = v;
-                  len.setAttribute("aria-valuenow", v); },
-      min: secs ? 5 : 1, max: secs ? 1800 : 64, step: secs ? 5 : 1, px: 3,
-      commit: saveTemplate
-    });
-
-    const unit = mini(secs ? "sec" : "bars", () => {
-      st.len.u = secs ? "bars" : "sec";
-      st.len.n = secs ? 8 : 60;      // a sensible default in the new unit
-      saveTemplate(); renderSteps();
-    });
-    const up = mini("↑", () => moveStep(i, -1));
-    const dn = mini("↓", () => moveStep(i,  1));
-    const rm = mini("×", () => { tplSel.steps.splice(i,1); saveTemplate(); renderTemplates(); });
-
-    for (const el of [n, lab, len, unit, up, dn, rm]) row.appendChild(el);
-    host.appendChild(row);
-  });
-}
-
+/* Composing a template happens on its own page. The drill page keeps the two
+   things that only make sense here: running the selected template, and adding
+   the drill you have just dialled in to it. */
 function renderTemplates(){
-  const list = Store.templates();
-  const pk = $("tplPick"); pk.innerHTML = "";
-
-  const off = chip("sm", !tplSel);
-  off.textContent = "off";
-  off.onclick = () => { tplSel = null; tplIdx = -1; renderTemplates(); };
-  pk.appendChild(off);
-
-  for (const t of list){
-    const b = chip("sm", !!tplSel && tplSel.id === t.id);
-    b.innerHTML = t.name + '<span class="ct">' + t.steps.length + '</span>';
-    b.onclick = () => { tplSel = t; tplIdx = -1; renderTemplates(); };
-    pk.appendChild(b);
-  }
-
-  const add = chip("sm", false);
-  add.textContent = "+ new";
-  add.onclick = () => {
-    const name = prompt("Name this template", "Drill " + (list.length + 1));
-    if (!name || !name.trim()) return;
-    tplSel = { id:"t" + Date.now().toString(36), name:name.trim().slice(0,40), steps:[] };
-    saveTemplate(); renderTemplates();
-  };
-  pk.appendChild(add);
-
-  $("tplBody").hidden = !tplSel;
-  $("tplHint").textContent = tplIdx >= 0
-    ? "step " + (tplIdx+1) + " of " + tplSel.steps.length
-    : (tplSel ? tplSel.steps.length + " steps" : "runs drills back to back");
-
-  renderSteps();
-
-  const ind = $("tStep");
   const show = !!tplSel && tplSel.steps.length > 0;
+  const ind = $("tStep");
   ind.hidden = !show;
   if (show) ind.querySelector("b").textContent =
     (tplIdx >= 0 ? tplIdx + 1 : "–") + "/" + tplSel.steps.length;
+  $("tAdd").setAttribute("aria-label",
+    tplSel ? "Add these settings to " + tplSel.name : "Add these settings to a new template");
 }
 
-$("tplAdd").onclick = () => {
-  if (!tplSel) return;
-  tplSel.steps.push(snapshotStep());
-  saveTemplate(); renderTemplates();
-};
+let flashT = null;
+function flash(msg){
+  const f = $("flash");
+  f.textContent = msg;
+  f.hidden = false;
+  clearTimeout(flashT);
+  flashT = setTimeout(() => { f.hidden = true; }, 1900);
+}
 
-$("tplRename").onclick = () => {
-  if (!tplSel) return;
-  const name = prompt("Rename template", tplSel.name);
-  if (!name || !name.trim()) return;
-  tplSel.name = name.trim().slice(0,40);
-  saveTemplate(); renderTemplates();
-};
-
-$("tplDel").onclick = () => {
-  if (!tplSel) return;
-  if (!confirm('Delete "' + tplSel.name + '" and its steps?')) return;
-  Store.dropTemplate(tplSel.id);
-  tplSel = null; tplIdx = -1;
+$("tAdd").onclick = () => {
+  let t = tplSel;
+  if (!t){
+    // No template open: make one rather than making you go somewhere else first.
+    const name = prompt("New template name", "Drill " + (Store.templates().length + 1));
+    if (!name || !name.trim()) return;
+    t = { id:"t" + Date.now().toString(36), name:name.trim().slice(0,40), steps:[] };
+    tplSel = t;
+    Store.setActiveTemplate(t.id);
+  }
+  t.steps.push(snapshotStep());
+  Store.putTemplate(t);
   renderTemplates();
+  flash("Added to " + t.name + " · " + t.steps.length +
+        " step" + (t.steps.length===1 ? "" : "s"));
 };
+
+/* The templates page owns which template is open; a full navigation is the only
+   thing between the two pages, so reading it at load is enough. */
+tplSel = Store.templates().find(t => t.id === Store.activeTemplate()) || null;
 
 $("tRamp").onclick = () => {
   cfg.ramp.on = !cfg.ramp.on;
