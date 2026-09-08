@@ -189,6 +189,7 @@
   .advbtn[aria-expanded="true"]{color:var(--ink)}
   .advbtn[aria-expanded="true"] .chev{transform:rotate(90deg)}
   #advBody{display:grid;gap:var(--sp3);padding-top:var(--sp3)}
+  #rampFields{display:grid;gap:var(--sp3);padding-top:var(--sp1)}
 
   .pick{display:flex;flex-wrap:wrap;gap:var(--sp2)}
   .chip{padding:8px 12px;font-size:12px;border-radius:var(--r1);
@@ -320,6 +321,19 @@
     <div class="grid" id="barGrid"></div>
   </div>
 
+  <div class="sect">
+    <h2>Tempo ramp <span class="hint">starts from the bpm above</span></h2>
+    <div class="pick" id="rampPick"></div>
+    <div id="rampFields" hidden>
+      <label>To <span class="val" id="rampToV">120 bpm</span>
+        <input id="rampTo" type="range" min="30" max="220" value="120" step="1">
+      </label>
+      <label>Over <span class="val" id="rampSecsV">60 s</span>
+        <input id="rampSecs" type="range" min="10" max="600" value="60" step="5">
+      </label>
+    </div>
+  </div>
+
   <div class="sect two">
     <div>
       <h2>Pads</h2>
@@ -443,10 +457,53 @@ let padEls=[], schedTimer=null, stressTimer=null;
    the entire exercise — so only the click stops. */
 const cfg = { bpm:84, meter:METERS[0], note:NOTES[0], feel:null,
               pattern:null, click:[], pads:2, padMode:"any", countIn:1, offset:0,
-              phrase:4, bars:[1,1,1,1] };
+              phrase:4, bars:[1,1,1,1], ramp:{on:false, to:120, secs:60} };
 const muted = () => cfg.bars.some(x => !x);
 const LOOKAHEAD=0.18, TICK=25, HISTORY=10;
 const beatDur = () => 60/cfg.bpm;
+
+/* ============================== tempo map ==============================
+   Without a ramp, beat n happens at n * 60/bpm — a multiplication. With one,
+   tempo varies over time, so beat position is the integral of tempo and the
+   relationship stops being linear.
+
+   Ramping LINEARLY IN TIME keeps both directions closed form, which matters
+   because both are needed: scheduling walks beats -> seconds, and the playhead
+   walks seconds -> beats. Neither has to step or search.
+
+     bpm(t)   = b0 + (b1-b0)·t/T                    for 0 <= t <= T
+     beats(t) = (b0·t + k·t²)/60   where k = (b1-b0)/2T
+     t(beats) = (-b0 + sqrt(b0² + 240·k·beats)) / 2k
+
+   Before the ramp (the count-in) and after it, tempo is constant and both
+   collapse back to the multiplication. */
+const rampOn = () =>
+  cfg.ramp.on && cfg.ramp.secs > 0 && cfg.ramp.to !== cfg.bpm;
+const rampK     = () => (cfg.ramp.to - cfg.bpm) / (2 * cfg.ramp.secs);
+const rampBeats = () => cfg.ramp.secs * (cfg.bpm + cfg.ramp.to) / 120;
+
+/* beats since the top of bar 0 -> seconds since the top of bar 0 */
+function timeAt(B){
+  if (!rampOn() || B <= 0) return B * 60 / cfg.bpm;
+  const BT = rampBeats();
+  if (B >= BT) return cfg.ramp.secs + (B - BT) * 60 / cfg.ramp.to;
+  const k = rampK();
+  return (-cfg.bpm + Math.sqrt(cfg.bpm*cfg.bpm + 240*k*B)) / (2*k);
+}
+
+/* seconds -> beats, the inverse */
+function beatsAt(t){
+  if (!rampOn() || t <= 0) return t * cfg.bpm / 60;
+  if (t >= cfg.ramp.secs) return rampBeats() + (t - cfg.ramp.secs) * cfg.ramp.to / 60;
+  return (cfg.bpm * t + rampK() * t * t) / 60;
+}
+
+/* Instantaneous tempo, for the capture window and the live readout. */
+function bpmAt(t){
+  if (!rampOn() || t <= 0) return cfg.bpm;
+  if (t >= cfg.ramp.secs) return cfg.ramp.to;
+  return cfg.bpm + (cfg.ramp.to - cfg.bpm) * t / cfg.ramp.secs;
+}
 
 /* One grid cell per subdivision of the current pattern. A feel's onsets are
    uneven, so it gets a plain eighth-note grid for its clicks to sit on. */
@@ -469,7 +526,10 @@ function defaultClick(){
 buildPattern(); defaultClick();
 
 function captureWindow(){
-  const on=cfg.pattern.on, b=beatDur();
+  /* Instantaneous, not nominal: under a ramp the window that counts as "near
+     this onset" has to shrink as the beats get shorter. */
+  const on=cfg.pattern.on;
+  const b = 60 / (ctx ? bpmAt(ctx.currentTime - startTime) : cfg.bpm);
   let min=cfg.pattern.beats;
   for (let i=0;i<on.length;i++){
     const a=on[i].p+(on[i].o||0);
@@ -506,12 +566,12 @@ function click(at, accent){
 
 function schedule(){
   const horizon = ctx.currentTime + LOOKAHEAD;
-  const on=cfg.pattern.on, len=on.length, bars=cfg.pattern.beats, b=beatDur();
+  const on=cfg.pattern.on, len=on.length, bars=cfg.pattern.beats;
+  const beatOf = n => Math.floor(n/len)*bars + on[n%len].p + (on[n%len].o||0);
 
-  while (startTime + (Math.floor(nextOnset/len)*bars +
-         on[nextOnset%len].p + (on[nextOnset%len].o||0))*b < horizon){
+  while (startTime + timeAt(beatOf(nextOnset)) < horizon){
     const k=nextOnset%len, o=on[k];
-    const t = startTime + (Math.floor(nextOnset/len)*bars + o.p + (o.o||0))*b;
+    const t = startTime + timeAt(beatOf(nextOnset));
     /* A null voice means any pad satisfies this onset. That is the default:
        the thing being measured is when you played, not which hand did it.
        Alternating is a second, harder skill, so it is opt-in. */
@@ -523,9 +583,9 @@ function schedule(){
   /* One pass per grid cell rather than per beat, so an accent can land on any
      subdivision. Read live from cfg.click, so editing the grid mid-drill takes
      effect as soon as the lookahead window rolls past. */
-  const sub=gridSub(), cells=cfg.click.length, step=b/sub;
-  while (startTime + nextCell*step < horizon){
-    const t = startTime + nextCell*step;
+  const sub=gridSub(), cells=cfg.click.length;
+  while (startTime + timeAt(nextCell/sub) < horizon){
+    const t = startTime + timeAt(nextCell/sub);
     const i = ((nextCell % cells) + cells) % cells;   // count-in runs negative
     /* Count-in is exempt: it runs before bar 0, and a muted count-in would
        leave you guessing where the drill even starts. */
@@ -654,6 +714,7 @@ function draw(ts){
   lastFrame = ts;
 
   playhead();
+  liveTempo();
 
   if (!W) return;
   const now = ctx ? ctx.currentTime : 0;
@@ -876,9 +937,10 @@ function captureSession(){
        with the same drill played to a click — but keying the exact pattern
        would spawn a bucket per arrangement and none would ever fill. */
     key: (cfg.feel ? "feel:"+cfg.feel.id : cfg.meter.id+"|"+cfg.note.id)
-         + (muted() ? "|m" : ""),
+         + (muted() ? "|m" : "") + (rampOn() ? "|r" : ""),
     label: (cfg.feel ? cfg.feel.name : cfg.meter.id+" · "+cfg.note.name.toLowerCase())
-         + (muted() ? " · muted bars" : ""),
+         + (muted() ? " · muted bars" : "") + (rampOn() ? " · ramp" : ""),
+    ramp: rampOn() ? {to:cfg.ramp.to, secs:cfg.ramp.secs} : null,
     bpm: cfg.bpm, pads: cfg.pads, padMode: cfg.padMode,
     bars: cfg.bars.slice(),
     n: hits.length, sum: r1(sum), sq: r1(sq),
@@ -1027,6 +1089,17 @@ function renderBars(){
   });
 }
 
+/* While ramping, the readout shows the tempo you are actually hearing. The
+   slider keeps meaning the tempo the ramp starts from, so the two do not fight. */
+let shownBpm = -1;
+function liveTempo(){
+  const v = (running && ctx && rampOn())
+    ? Math.round(bpmAt(ctx.currentTime - startTime)) : cfg.bpm;
+  if (v === shownBpm) return;
+  shownBpm = v;
+  $("bpmv").textContent = v;
+}
+
 /* The playhead is a class swap on one cell rather than a redraw, so the grid can
    be rebuilt whenever it likes without knowing anything about timing. */
 let gridEls=[], lastCell=-1;
@@ -1056,8 +1129,8 @@ function renderGrid(){
 function playhead(){
   let i = -1;
   if (running && ctx && gridEls.length){
-    const step = beatDur()/gridSub(), cells = cfg.click.length;
-    const n = Math.floor((ctx.currentTime - latency() - startTime)/step);
+    const sub = gridSub(), cells = cfg.click.length;
+    const n = Math.floor(beatsAt(ctx.currentTime - latency() - startTime) * sub);
     i = ((n % cells) + cells) % cells;      // count-in runs negative
   }
   if (i === lastCell) return;
@@ -1075,6 +1148,37 @@ function rebuild(){
   if (running){ stop(); start(); }
   clearAll();
 }
+
+function renderRamp(){
+  const rp=$("rampPick"); rp.innerHTML="";
+  for (const v of [false,true]){
+    const b=chip("sm", cfg.ramp.on===v);
+    b.textContent = v ? "on" : "off";
+    b.setAttribute("aria-label", v ? "tempo ramp on" : "tempo ramp off");
+    b.onclick=()=>{
+      cfg.ramp.on=v; renderRamp();
+      if (running){ stop(); start(); }
+      clearAll();
+    };
+    rp.appendChild(b);
+  }
+  $("rampFields").hidden = !cfg.ramp.on;
+  $("rampTo").value = cfg.ramp.to;
+  $("rampSecs").value = cfg.ramp.secs;
+  $("rampToV").textContent = cfg.ramp.to + " bpm";
+  $("rampSecsV").textContent = cfg.ramp.secs + " s";
+}
+
+/* oninput tracks the label, onchange restarts. Restarting on every input event
+   would tear down the drill on each pixel of a drag. */
+$("rampTo").oninput = e => {
+  cfg.ramp.to=+e.target.value; $("rampToV").textContent=cfg.ramp.to+" bpm"; };
+$("rampSecs").oninput = e => {
+  cfg.ramp.secs=+e.target.value; $("rampSecsV").textContent=cfg.ramp.secs+" s"; };
+$("rampTo").onchange = $("rampSecs").onchange = () => {
+  if (running){ stop(); start(); }
+  clearAll();
+};
 
 $("advToggle").onclick = () => {
   const body=$("advBody"), open=body.hidden;
@@ -1123,7 +1227,8 @@ $("stress").onchange = e => {
   } else { jank = 0; }
 };
 
-renderPickers(); renderGrid(); renderBars(); buildPads(); resize(); stats();
+renderPickers(); renderGrid(); renderBars(); renderRamp();
+buildPads(); resize(); stats();
 
 /* ============================== install ============================== */
 if ("serviceWorker" in navigator){
