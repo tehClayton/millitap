@@ -96,24 +96,33 @@
   #run.on .i-play{display:none}
   #run.on .i-stop{display:block}
   #gear.on{background:var(--panel-hi);border-color:var(--ink-mute);color:var(--ink)}
-  /* One slider, several fields. Tapping a field aims the slider at it, so a ramp
-     is set with the same gesture as a tempo — and it lives where you are already
-     looking rather than behind the gear, three sections down. */
-  .tempo{display:flex;align-items:center;gap:var(--sp3);flex:1;min-width:230px}
-  .tempo input[type=range]{flex:1;accent-color:var(--drag);min-width:70px}
-  .tvals{display:flex;align-items:center;gap:2px;flex:0 0 auto}
+  /* Each number is its own control, scrubbed vertically the way a DAW does it.
+     That removes the slider and with it the "which field am I editing" mode a
+     single track forced, and lets each field carry its own resolution — one bpm
+     per notch, five seconds per notch, over ranges twelve times apart. */
+  .tempo{display:flex;align-items:center;gap:var(--sp2);flex:1;min-width:150px}
+  .tvals{display:flex;align-items:center;gap:var(--sp1);flex:0 0 auto}
   .tval{display:flex;flex-direction:column;align-items:center;justify-content:center;
-    gap:2px;padding:4px 7px;min-width:44px;border-radius:var(--r1);
-    background:none;border:1px solid transparent;box-shadow:none;color:var(--ink)}
-  .tval b{font-family:var(--fig);font-size:19px;font-weight:500;line-height:1;
+    gap:3px;padding:6px 10px;min-width:56px;border-radius:var(--r1);color:var(--ink);
+    background:linear-gradient(var(--raise-a),var(--raise-b));
+    border:1px solid var(--rule);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.055);
+    cursor:ns-resize;
+    /* Without this the browser claims the vertical drag for panning. */
+    touch-action:none;
+    -webkit-user-select:none;user-select:none}
+  .tval b{font-family:var(--fig);font-size:22px;font-weight:500;line-height:1;
     font-variant-numeric:tabular-nums;letter-spacing:-.02em}
   .tval i{font-style:normal;font-size:8px;letter-spacing:.12em;text-transform:uppercase;
     color:var(--ink-mute);line-height:1}
-  .tval.sel{background:var(--panel-hi);border-color:var(--rule)}
-  .tval.sel i{color:var(--ink-dim)}
+  .tval.drag{background:var(--panel-hi);border-color:var(--true)}
+  .tval.drag i{color:var(--ink-dim)}
+  .tval:focus-visible{outline:2px solid var(--true);outline-offset:2px}
+  /* The live readout is output, not input: no raised face, nothing to grab. */
+  .tval.live{background:none;border-color:transparent;box-shadow:none;cursor:default}
   .tval.live b{color:var(--true)}
   .tval.live i{color:var(--true);opacity:.7}
-  .tramp{display:flex;align-items:center;justify-content:center;width:28px;height:34px;
+  .tramp{display:flex;align-items:center;justify-content:center;width:30px;height:40px;
     padding:0;background:none;border:none;box-shadow:none;color:var(--ink-mute)}
   .tramp svg{width:16px;height:16px;fill:currentColor;display:block}
   .tramp.on{color:var(--true)}
@@ -299,15 +308,17 @@
   </button>
   <div class="tempo">
     <div class="tvals">
-      <button class="tval sel" id="tFrom" type="button"><b>84</b><i>bpm</i></button>
+      <button class="tval" id="tFrom" type="button" role="spinbutton"
+        aria-label="Tempo" aria-valuemin="30" aria-valuemax="220" aria-valuenow="84"><b>84</b><i>bpm</i></button>
       <button class="tramp" id="tArrow" type="button" aria-label="Tempo ramp off">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11h11.2l-3.6-3.6L13 6l6 6-6 6-1.4-1.4 3.6-3.6H4z"/></svg>
       </button>
-      <button class="tval" id="tTo" type="button" hidden><b>120</b><i>to</i></button>
-      <button class="tval" id="tSecs" type="button" hidden><b>30</b><i>sec</i></button>
+      <button class="tval" id="tTo" type="button" hidden role="spinbutton"
+        aria-label="Ramp target tempo" aria-valuemin="30" aria-valuemax="220" aria-valuenow="120"><b>120</b><i>to</i></button>
+      <button class="tval" id="tSecs" type="button" hidden role="spinbutton"
+        aria-label="Ramp duration in seconds" aria-valuemin="5" aria-valuemax="600" aria-valuenow="30"><b>30</b><i>sec</i></button>
       <span class="tval live" id="tNow" hidden><b>—</b><i>now</i></span>
     </div>
-    <input id="bpm" type="range" min="30" max="220" value="84" step="1" aria-label="Tempo">
   </div>
   <button id="clear">Clear</button>
   <button id="gear" class="iconbtn" aria-label="Settings" aria-expanded="false">
@@ -1173,45 +1184,90 @@ function rebuild(){
   clearAll();
 }
 
-/* The three numbers the tempo control can edit. The slider is aimed at whichever
-   one is selected, which is what lets a single track serve all of them. */
-const TFIELD = {
-  from:{ get:()=>cfg.bpm,        set:v=>cfg.bpm=v,         min:30, max:220, step:1,
-         label:"Tempo" },
-  to:  { get:()=>cfg.ramp.to,    set:v=>cfg.ramp.to=v,     min:30, max:220, step:1,
-         label:"Ramp target tempo" },
-  secs:{ get:()=>cfg.ramp.secs,  set:v=>cfg.ramp.secs=v,   min:5,  max:600, step:5,
-         label:"Ramp duration in seconds" }
+/* Each field is scrubbed directly: press and drag, up to raise, down to lower —
+   the gesture every DAW uses on a value field. px is how far you drag for one
+   notch, so the seconds field moves five at a time over a range twelve times
+   wider than the tempo without feeling twelve times slower. */
+const TF = {
+  tFrom: { get:()=>cfg.bpm,       set:v=>cfg.bpm=v,       min:30, max:220, step:1, px:3 },
+  tTo:   { get:()=>cfg.ramp.to,   set:v=>cfg.ramp.to=v,   min:30, max:220, step:1, px:3 },
+  tSecs: { get:()=>cfg.ramp.secs, set:v=>cfg.ramp.secs=v, min:5,  max:600, step:5, px:3 }
 };
-const TIDS = { from:"tFrom", to:"tTo", secs:"tSecs" };
-let editing = "from";
+
+function setField(id, v){
+  const f = TF[id];
+  f.set(Math.max(f.min, Math.min(f.max, v)));
+  renderTempo();
+}
+
+function commitTempo(){
+  if (running){ stop(); start(); }
+  clearAll();
+}
 
 function renderTempo(){
   const on = cfg.ramp.on;
-  $("tFrom").querySelector("b").textContent = cfg.bpm;
-  $("tFrom").querySelector("i").textContent = on ? "start" : "bpm";
-  $("tTo").querySelector("b").textContent   = cfg.ramp.to;
-  $("tSecs").querySelector("b").textContent = cfg.ramp.secs;
+  const put = (id, v, lab) => {
+    const el = $(id);
+    el.querySelector("b").textContent = v;
+    if (lab) el.querySelector("i").textContent = lab;
+    el.setAttribute("aria-valuenow", v);
+  };
+  put("tFrom", cfg.bpm, on ? "start" : "bpm");
+  put("tTo",   cfg.ramp.to);
+  put("tSecs", cfg.ramp.secs);
   $("tTo").hidden = !on;
   $("tSecs").hidden = !on;
   $("tArrow").classList.toggle("on", on);
   $("tArrow").setAttribute("aria-label", on ? "Tempo ramp on" : "Tempo ramp off");
-  for (const k in TIDS) $(TIDS[k]).classList.toggle("sel", editing===k);
-
-  const f = TFIELD[editing], sl = $("bpm");
-  sl.min=f.min; sl.max=f.max; sl.step=f.step; sl.value=f.get();
-  sl.setAttribute("aria-label", f.label);
 }
 
-for (const k in TIDS) $(TIDS[k]).onclick = () => { editing=k; renderTempo(); };
+function scrub(id){
+  const el = $(id), f = TF[id];
+  let base = 0, y0 = 0, live = false;
+
+  el.addEventListener("pointerdown", e => {
+    live = true; base = f.get(); y0 = e.clientY;
+    el.setPointerCapture(e.pointerId);
+    el.classList.add("drag");
+    e.preventDefault();
+  });
+
+  el.addEventListener("pointermove", e => {
+    if (!live) return;
+    // Screen y grows downward, so subtracting puts "up" on the positive side.
+    setField(id, base + Math.round((y0 - e.clientY) / f.px) * f.step);
+  });
+
+  const end = e => {
+    if (!live) return;
+    live = false;
+    el.classList.remove("drag");
+    if (el.hasPointerCapture && el.hasPointerCapture(e.pointerId))
+      el.releasePointerCapture(e.pointerId);
+    commitTempo();
+  };
+  el.addEventListener("pointerup", end);
+  el.addEventListener("pointercancel", end);
+
+  /* A drag is not reachable from a keyboard, and the slider this replaced was.
+     role=spinbutton means the arrows are what a screen reader will announce. */
+  el.addEventListener("keydown", e => {
+    const up = e.key==="ArrowUp"   || e.key==="PageUp";
+    const dn = e.key==="ArrowDown" || e.key==="PageDown";
+    if (!up && !dn) return;
+    e.preventDefault();
+    const mult = (e.key==="PageUp" || e.key==="PageDown") ? 10 : 1;
+    setField(id, f.get() + (up ? 1 : -1) * f.step * mult);
+    commitTempo();
+  });
+}
+for (const id in TF) scrub(id);
 
 $("tArrow").onclick = () => {
   cfg.ramp.on = !cfg.ramp.on;
-  // The other two fields vanish with the ramp, so the slider cannot stay aimed there.
-  if (!cfg.ramp.on) editing = "from";
   renderTempo();
-  if (running){ stop(); start(); }
-  clearAll();
+  commitTempo();
 };
 
 $("advToggle").onclick = () => {
@@ -1219,10 +1275,7 @@ $("advToggle").onclick = () => {
   body.hidden = !open;
   $("advToggle").setAttribute("aria-expanded", String(open));
 };
-/* oninput tracks the number, onchange restarts. Restarting per input event tore
-   the drill down on every pixel of a drag, which the old handler did. */
-$("bpm").oninput = e => { TFIELD[editing].set(+e.target.value); renderTempo(); };
-$("bpm").onchange = () => { if (running){ stop(); start(); } clearAll(); };
+
 $("off").oninput = e=>{ cfg.offset=+e.target.value; $("offv").textContent=cfg.offset+" ms"; };
 
 $("run").onclick = toggle;
