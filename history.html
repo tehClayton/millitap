@@ -313,8 +313,10 @@ function chartPositions(rows){
   for (let i=0;i<len;i++) stats.push(Store.poolPos(rows, i));
   if (!stats.some(s => s.n)) return none(host, "No positional data yet.");
 
+  const pads = (rows[rows.length-1] || {}).pads || 1;
   const f = frame(host, 200, {l:40,r:14,t:12,b:26});
-  const span = Math.max(30, Math.max(...stats.map(s => Math.abs(s.mean)+s.sd))*1.15);
+  const span = Math.max(30,
+    Math.max(...stats.map(s => s.n ? Math.abs(s.mean)+s.sd : 0))*1.15);
   const X = i => len===1 ? (f.L+f.R)/2 : f.L + (i+0.5)/len*(f.R-f.L);
   const Y = v => (f.T+f.B)/2 - v/span*((f.B-f.T)/2);
 
@@ -322,22 +324,47 @@ function chartPositions(rows){
   f.svg.appendChild(el("line",{x1:f.L,y1:Y(0),x2:f.R,y2:Y(0),
     stroke:css("--true"),"stroke-width":1.5,"stroke-opacity":.55}));
 
+  /* Mirrors the scheduler's rule: onsets without an explicit voice alternate
+     across the pads by index, so with two pads the odd onsets are all one hand. */
+  const name = i => {
+    const beat = Math.floor(pos[i]) + 1, sub = pos[i] % 1;
+    return (sub ? "beat "+beat+" + "+sub.toFixed(2).replace(/0+$/,"") : "beat "+beat)
+         + (pads > 1 ? " · pad "+(i % pads + 1) : "");
+  };
+
+  let empty = 0;
   stats.forEach((s,i) => {
-    if (!s.n) return;
-    const x = X(i), col = devColour(s.mean);
+    const x = X(i);
+    if (len <= 8 || Number.isInteger(pos[i])) xLabel(f, x, String(Math.floor(pos[i])+1));
+
+    /* A position you never hit is the most important thing this chart can tell
+       you, and drawing nothing made it indistinguishable from a position the
+       pattern does not contain — the weakness finder hiding the weakness. */
+    if (!s.n){
+      empty++;
+      const r = 5, g = el("g",{stroke:css("--miss"),"stroke-width":2,"stroke-linecap":"round"});
+      g.appendChild(el("line",{x1:x-r,y1:Y(0)-r,x2:x+r,y2:Y(0)+r}));
+      g.appendChild(el("line",{x1:x+r,y1:Y(0)-r,x2:x-r,y2:Y(0)+r}));
+      f.svg.appendChild(g);
+      const hit = el("circle",{cx:x,cy:Y(0),r:12,fill:"transparent"});
+      f.svg.appendChild(hit);
+      bindTip(hit, "<b>"+name(i)+"</b><br>never hit<br>"+
+        (pads > 1 ? "missed, or played on another pad" : "missed every time"));
+      return;
+    }
+
+    const col = devColour(s.mean);
     f.svg.appendChild(el("line",{x1:x,y1:Y(s.mean-s.sd),x2:x,y2:Y(s.mean+s.sd),
       stroke:col,"stroke-width":4,"stroke-opacity":.34,"stroke-linecap":"round"}));
-    const beat = Math.floor(pos[i]) + 1;
-    const sub  = pos[i] % 1;
     dot(f, x, Y(s.mean), col,
-      "<b>"+(sub ? "beat "+beat+" + "+sub.toFixed(2).replace(/0+$/,"") : "beat "+beat)+"</b><br>"+
-      ms(s.mean)+" ms average<br>"+s.sd.toFixed(1)+" ms spread<br>"+s.n+" taps");
-    if (len <= 8 || Number.isInteger(pos[i])) xLabel(f, x, String(beat));
+      "<b>"+name(i)+"</b><br>"+ms(s.mean)+" ms average<br>"+
+      s.sd.toFixed(1)+" ms spread<br>"+s.n+" taps");
   });
 
   $("l3").innerHTML =
     '<span><i class="sw" style="background:'+css("--rush")+'"></i>rushes here</span>'+
     '<span><i class="sw" style="background:'+css("--drag")+'"></i>drags here</span>'+
+    (empty ? '<span><i class="sw" style="background:'+css("--miss")+'"></i>never hit</span>' : '')+
     '<span>pooled across '+rows.length+' session'+(rows.length===1?"":"s")+'</span>';
 }
 
