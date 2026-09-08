@@ -314,6 +314,12 @@
     <div class="grid" id="clickGrid"></div>
   </div>
 
+  <div class="sect">
+    <h2>Phrase <span class="hint">bars · tap to silence the click</span></h2>
+    <div class="pick" id="phrasePick"></div>
+    <div class="grid" id="barGrid"></div>
+  </div>
+
   <div class="sect two">
     <div>
       <h2>Pads</h2>
@@ -432,8 +438,13 @@ let nextOnset=0, nextCell=0, targets=[], taps=[], missed=0, extra=0;
 let padEls=[], schedTimer=null, stressTimer=null;
 
 /* click is one state per grid cell: 0 off, 1 on, 2 accent. */
+/* bars is one flag per bar of the phrase: 1 sounds, 0 is silent. The targets
+   are still scheduled through a silent bar — playing on without a reference is
+   the entire exercise — so only the click stops. */
 const cfg = { bpm:84, meter:METERS[0], note:NOTES[0], feel:null,
-              pattern:null, click:[], pads:2, padMode:"any", countIn:1, offset:0 };
+              pattern:null, click:[], pads:2, padMode:"any", countIn:1, offset:0,
+              phrase:4, bars:[1,1,1,1] };
+const muted = () => cfg.bars.some(x => !x);
 const LOOKAHEAD=0.18, TICK=25, HISTORY=10;
 const beatDur = () => 60/cfg.bpm;
 
@@ -516,8 +527,13 @@ function schedule(){
   while (startTime + nextCell*step < horizon){
     const t = startTime + nextCell*step;
     const i = ((nextCell % cells) + cells) % cells;   // count-in runs negative
+    /* Count-in is exempt: it runs before bar 0, and a muted count-in would
+       leave you guessing where the drill even starts. */
+    const bar = Math.floor(nextCell / cells);
+    const P = cfg.bars.length;
+    const sounds = nextCell < 0 || cfg.bars[((bar % P) + P) % P];
     if (t >= clickFrom - 1e-9){
-      if (cfg.click[i]) click(t, cfg.click[i]===2);
+      if (sounds && cfg.click[i]) click(t, cfg.click[i]===2);
     } else if (i % sub === 0) click(t, i===0);        // count-in is always audible
     nextCell++;
   }
@@ -855,9 +871,16 @@ function captureSession(){
 
   Store.add({
     t: Date.now(),
-    key: cfg.feel ? "feel:"+cfg.feel.id : cfg.meter.id+"|"+cfg.note.id,
-    label: cfg.feel ? cfg.feel.name : cfg.meter.id+" · "+cfg.note.name.toLowerCase(),
+    /* Muting is keyed as a flag, not as the pattern. Drilling through silence
+       is a genuinely harder exercise and its spread should not be averaged in
+       with the same drill played to a click — but keying the exact pattern
+       would spawn a bucket per arrangement and none would ever fill. */
+    key: (cfg.feel ? "feel:"+cfg.feel.id : cfg.meter.id+"|"+cfg.note.id)
+         + (muted() ? "|m" : ""),
+    label: (cfg.feel ? cfg.feel.name : cfg.meter.id+" · "+cfg.note.name.toLowerCase())
+         + (muted() ? " · muted bars" : ""),
     bpm: cfg.bpm, pads: cfg.pads, padMode: cfg.padMode,
+    bars: cfg.bars.slice(),
     n: hits.length, sum: r1(sum), sq: r1(sq),
     missed: Math.max(0, missed - savedMissed),
     extra:  fresh.filter(x => x.kind!=="hit").length,
@@ -974,6 +997,36 @@ function renderPickers(){
   $("feelHint").textContent = cfg.feel ? "own bar — tap again to clear" : "";
 }
 
+/* Bars reuse the click grid's cells, at two states rather than three, so the
+   two rows read as the same kind of control at different scales. */
+function renderBars(){
+  const pp=$("phrasePick"); pp.innerHTML="";
+  for (const n of [1,2,4,8]){
+    const b=chip("fig", cfg.bars.length===n);
+    b.textContent=String(n);
+    b.setAttribute("aria-label", n===1 ? "1 bar phrase" : n+" bar phrase");
+    b.onclick=()=>{
+      // Keep what still fits rather than resetting: shortening a phrase should
+      // not silently discard the pattern you just set on its first few bars.
+      const old=cfg.bars;
+      cfg.bars=Array.from({length:n}, (_,i) => i<old.length ? old[i] : 1);
+      cfg.phrase=n; renderBars();
+    };
+    pp.appendChild(b);
+  }
+
+  const host=$("barGrid"); host.innerHTML="";
+  cfg.bars.forEach((on,i)=>{
+    const b=document.createElement("button");
+    b.type="button";
+    b.className="cell beat s"+(on?1:0);
+    b.dataset.n=String(i+1);
+    b.setAttribute("aria-label","bar "+(i+1)+": "+(on?"click sounds":"silent"));
+    b.onclick=()=>{ cfg.bars[i]=cfg.bars[i]?0:1; renderBars(); };
+    host.appendChild(b);
+  });
+}
+
 /* The playhead is a class swap on one cell rather than a redraw, so the grid can
    be rebuilt whenever it likes without knowing anything about timing. */
 let gridEls=[], lastCell=-1;
@@ -1018,7 +1071,7 @@ function playhead(){
    from four cells of edits onto seven. */
 function rebuild(){
   buildPattern(); defaultClick();
-  renderPickers(); renderGrid();
+  renderPickers(); renderGrid(); renderBars();
   if (running){ stop(); start(); }
   clearAll();
 }
@@ -1070,7 +1123,7 @@ $("stress").onchange = e => {
   } else { jank = 0; }
 };
 
-renderPickers(); renderGrid(); buildPads(); resize(); stats();
+renderPickers(); renderGrid(); renderBars(); buildPads(); resize(); stats();
 
 /* ============================== install ============================== */
 if ("serviceWorker" in navigator){
