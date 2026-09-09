@@ -259,24 +259,39 @@
   /* Meter, note value, the click grid and the phrase live on the page now: what
      a drill is configured to do should be legible while you are doing it, not
      three sections into an overlay you have to open mid-take. */
-  .pattern{flex:0 0 auto;display:grid;gap:var(--sp2);
+  .pattern{flex:0 0 auto;display:grid;gap:6px;
     background:var(--panel);border-radius:var(--r2);
-    padding:var(--sp2) var(--sp3) var(--sp3);
+    padding:var(--sp2) var(--sp3) 10px;
     box-shadow:inset 0 0 0 1px rgba(0,0,0,.42), inset 0 2px 5px rgba(0,0,0,.3)}
-  .prow{display:flex;align-items:center;gap:var(--sp3);flex-wrap:wrap}
-  .brow{display:flex;align-items:center;gap:var(--sp2)}
-  .phlen{padding:5px 9px;min-width:34px;font-size:12px}
+  /* Meter, note value and feel are three ways of saying the same thing — what a
+     bar contains — and only one can be active at a time, so they read as one
+     strip. It scrolls rather than wraps: wrapping made the band's height depend
+     on the viewport, and a control strip whose height moves is worse than one
+     you nudge sideways on a narrow screen. */
+  .prow{display:flex;align-items:center;gap:var(--sp3);flex-wrap:nowrap;
+    overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .prow::-webkit-scrollbar{display:none}
+  .prow > .pick{flex:0 0 auto;flex-wrap:nowrap}
+  /* Safe with nowrap: a divider can never land at the start of a wrapped line. */
+  .prow > .pick + .pick{border-left:1px solid var(--rule);padding-left:var(--sp3)}
+  .brow{display:flex;align-items:center;gap:6px}
+  /* Denser than the settings panel: this band is read at a glance, not filled in. */
+  .pattern .chip{padding:5px 9px;font-size:11px}
+  .pattern .chip.sm{padding:4px 8px;font-size:10px}
+  .pattern .chip.glyph{padding:3px 6px;min-width:36px}
+  .pattern .chip.glyph svg{height:18px}
+  .phlen{padding:4px 8px;min-width:30px;font-size:11px}
 
   /* Cells divide the width rather than wrapping. Sixteenths in 7/8 is 28 of
      them; wrapping made the block's height depend on the meter, and one bar
      should read as one row whatever it contains. */
-  .grid{display:flex;gap:3px;width:100%}
-  .cell{position:relative;flex:1 1 0;min-width:0;height:34px;padding:0;
-    border-radius:5px;background:rgba(255,255,255,.035);
+  .grid{display:flex;gap:2px;width:100%}
+  .cell{position:relative;flex:1 1 0;min-width:0;height:26px;padding:0;
+    border-radius:4px;background:rgba(255,255,255,.035);
     border:1px solid var(--rule);box-shadow:none}
   /* Bars are the same control an octave down: shorter, under the beats they group. */
-  .bars{display:flex;gap:3px;flex:1;min-width:0}
-  .bcell{flex:1 1 0;min-width:0;height:16px;padding:0;border-radius:4px;
+  .bars{display:flex;gap:2px;flex:1;min-width:0}
+  .bcell{flex:1 1 0;min-width:0;height:11px;padding:0;border-radius:3px;
     background:rgba(255,255,255,.03);border:1px solid var(--rule);box-shadow:none}
   .bcell.on{background:var(--ink-dim);border-color:var(--ink-dim)}
   .bcell.now{box-shadow:0 0 0 2px var(--ink)}
@@ -284,8 +299,8 @@
   .cell.s1{background:var(--ink-dim);border-color:var(--ink-dim)}
   .cell.s2{background:var(--true);border-color:var(--true);
     box-shadow:0 0 16px -6px var(--true)}
-  .cell.beat::after{content:attr(data-n);position:absolute;top:2px;left:0;right:0;
-    font-size:9px;font-family:var(--fig);color:var(--ink-mute)}
+  .cell.beat::after{content:attr(data-n);position:absolute;top:1px;left:0;right:0;
+    font-size:8px;font-family:var(--fig);color:var(--ink-mute)}
   .cell.s1.beat::after,.cell.s2.beat::after{color:#0C1710}
   /* No transition on the playhead: easing it would smear the moment the click
      fell across several frames, and that moment is the whole subject. */
@@ -354,7 +369,7 @@
   <div class="prow">
     <div class="pick" id="meterPick"></div>
     <div class="pick" id="notePick"></div>
-    <button class="chip sm" type="button" id="feelNow" hidden></button>
+    <div class="pick" id="feelPick"></div>
   </div>
   <div class="grid" id="clickGrid"></div>
   <div class="brow">
@@ -407,11 +422,6 @@
 <div id="scrim" hidden></div>
 
 <div id="settings" class="settings" hidden>
-  <div class="sect">
-    <h2>Feel <span class="hint" id="feelHint"></span></h2>
-    <div class="pick" id="feelPick"></div>
-  </div>
-
 
   <div class="sect two">
     <div>
@@ -518,14 +528,16 @@ const NOTES = [
 
 /* Feels carry microtiming or a fixed shape that only makes sense at a set bar
    length, so each defines its own and overrides the meter while selected. */
+/* short is what fits on the drill page; name is what a session bucket or a
+   template step is called, where there is room to be unambiguous. */
 const FEELS = [
-  {id:"sw67",  name:"Swung — triplet",   beats:4, on:seq(8,0.5, 1/6)},
-  {id:"sw58",  name:"Swung — light",     beats:4, on:seq(8,0.5, 0.085)},
-  {id:"off",   name:"Offbeat eighths",   beats:4, on:[{p:0.5},{p:1.5},{p:2.5},{p:3.5}]},
-  {id:"bb",    name:"Backbeats",         beats:4, on:[{p:1},{p:3}]},
-  {id:"bblb",  name:"Backbeats — laid back", beats:4, on:[{p:1,o:0.05},{p:3,o:0.05}]},
-  {id:"bbpu",  name:"Backbeats — pushed",    beats:4, on:[{p:1,o:-0.04},{p:3,o:-0.04}]},
-  {id:"clave", name:"Son clave 3–2",     beats:8, on:[{p:0},{p:1.5},{p:3},{p:5},{p:6}]},
+  {id:"sw67",  short:"swing",     name:"Swung — triplet",   beats:4, on:seq(8,0.5, 1/6)},
+  {id:"sw58",  short:"light swing", name:"Swung — light",   beats:4, on:seq(8,0.5, 0.085)},
+  {id:"off",   short:"offbeat",   name:"Offbeat eighths",   beats:4, on:[{p:0.5},{p:1.5},{p:2.5},{p:3.5}]},
+  {id:"bb",    short:"backbeat",  name:"Backbeats",         beats:4, on:[{p:1},{p:3}]},
+  {id:"bblb",  short:"laid back", name:"Backbeats — laid back", beats:4, on:[{p:1,o:0.05},{p:3,o:0.05}]},
+  {id:"bbpu",  short:"pushed",    name:"Backbeats — pushed",    beats:4, on:[{p:1,o:-0.04},{p:3,o:-0.04}]},
+  {id:"clave", short:"clave",     name:"Son clave 3–2",     beats:8, on:[{p:0},{p:1.5},{p:3},{p:5},{p:6}]},
 ];
 
 /* ============================== state ============================== */
@@ -1122,7 +1134,9 @@ function renderPickers(){
   const fp=$("feelPick"); fp.innerHTML="";
   for (const f of FEELS){
     const b=chip("sm", cfg.feel===f);
-    b.textContent=f.name;
+    b.textContent=f.short;
+    // The full name only exists in the label; a screen reader should get it.
+    b.setAttribute("aria-label", f.name);
     b.onclick=()=>{ cfg.feel = cfg.feel===f ? null : f; rebuild(); };
     fp.appendChild(b);
   }
@@ -1165,18 +1179,6 @@ function renderPickers(){
     cp.appendChild(b);
   }
 
-  /* A feel defines its own bar and subdivision, so it stands in for the note
-     glyphs rather than leaving four dead chips beside a disabled meter row. */
-  const fn = $("feelNow");
-  fn.hidden = !cfg.feel;
-  $("notePick").hidden = !!cfg.feel;
-  if (cfg.feel){
-    fn.textContent = cfg.feel.name + "  ×";
-    fn.setAttribute("aria-label", "Clear feel " + cfg.feel.name);
-    fn.onclick = () => { cfg.feel = null; rebuild(); };
-  }
-
-  $("feelHint").textContent = cfg.feel ? "own bar — tap again to clear" : "";
 }
 
 /* Bars reuse the click grid's cells, at two states rather than three, so the
