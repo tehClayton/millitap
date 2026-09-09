@@ -157,27 +157,33 @@
   /* Hierarchy, finally. Last tap is the hero; spread is second, because the
      README is right that it is the number that improves with practice. The
      other three are reference, not headline, and are sized accordingly. */
-  .readout{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp2);flex:0 0 auto}
-  .hero{background:var(--panel);border-radius:var(--r2);
-    padding:10px var(--sp3) var(--sp3);min-width:0;
-    box-shadow:inset 0 0 0 1px rgba(0,0,0,.42), inset 0 2px 5px rgba(0,0,0,.3)}
-  .hero b{display:block;font-family:var(--fig);font-weight:500;line-height:1;
-    font-size:clamp(30px,6.4vh,44px);font-variant-numeric:tabular-nums;
-    letter-spacing:-.025em;white-space:nowrap}
-  .hero i{display:block;font-style:normal;font-size:10px;letter-spacing:.11em;
-    text-transform:uppercase;color:var(--ink-mute);margin-top:7px}
-  .hero.second b{font-size:clamp(24px,5vh,34px)}
-  .minor{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:var(--sp2) var(--sp5);
-    padding:2px var(--sp1) 0}
-  /* Child combinator, not a descendant one: mErr nests a <span class="sl">
-     for the separator, and a bare `.minor span` turned that into a block-level
-     flex container, breaking "0 / 0" onto three lines. */
-  .minor > span{display:flex;align-items:baseline;gap:7px;min-width:0}
-  .minor b{font-family:var(--fig);font-size:15px;font-weight:500;
+  /* One quiet row instead of two big tiles. The figures that stay on screen are
+     the ones still true a minute from now; the last tap, which is stale almost
+     immediately, gets the middle of the screen for a moment instead of a
+     permanent slab. Spread leads, because it is the number practice improves. */
+  .readout{flex:0 0 auto;display:flex;flex-wrap:wrap;align-items:baseline;
+    gap:var(--sp2) var(--sp5);padding:0 var(--sp2)}
+  .stat{display:flex;align-items:baseline;gap:7px;min-width:0}
+  .stat b{font-family:var(--fig);font-size:17px;font-weight:500;
     font-variant-numeric:tabular-nums;white-space:nowrap}
-  .minor i{font-style:normal;font-size:10px;letter-spacing:.1em;
+  .stat i{font-style:normal;font-size:9px;letter-spacing:.11em;
     text-transform:uppercase;color:var(--ink-mute)}
+  .stat.lead b{font-size:25px;letter-spacing:-.02em}
+  .stat.lead i{color:var(--ink-dim)}
   .sl{color:var(--ink-mute)}
+
+  /* Appears instantly — a fade-in would blur the moment it is reporting — and
+     only the exit is eased. */
+  #lastPop{position:fixed;left:50%;top:36%;transform:translate(-50%,-50%);
+    font-family:var(--fig);font-size:clamp(48px,12vh,88px);font-weight:500;
+    letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1;
+    pointer-events:none;z-index:15;opacity:0;transition:opacity .5s ease;
+    text-shadow:0 6px 34px rgba(5,9,13,.8)}
+  #lastPop.on{opacity:1;transition:none}
+  #lastPop.c-rush{color:var(--rush)}
+  #lastPop.c-drag{color:var(--drag)}
+  #lastPop.c-true{color:var(--true)}
+  #lastPop.c-miss{color:var(--miss)}
 
   /* The pads are the thing your hands aim at and had the least design on the
      screen. Now they are the most raised surface in the app, with the numeral
@@ -226,6 +232,10 @@
   .advbtn[aria-expanded="true"] .chev{transform:rotate(90deg)}
   #advBody{display:grid;gap:var(--sp3);padding-top:var(--sp3)}
   .navs{justify-self:end;display:flex;align-items:center;gap:2px}
+  .navbtn{display:flex;align-items:center;justify-content:center;padding:var(--sp1);
+    background:none;border:none;box-shadow:none;color:var(--ink-mute)}
+  .navbtn svg{width:17px;height:17px;fill:currentColor;display:block}
+  .navbtn.on{color:var(--true)}
   #flash{position:fixed;left:50%;transform:translateX(-50%);
     top:calc(var(--sp4) + env(safe-area-inset-top));
     background:var(--panel-hi);border:1px solid var(--true);color:var(--ink);
@@ -246,9 +256,30 @@
     box-shadow:0 0 18px -7px var(--true)}
   .chip:disabled{opacity:.28}
 
-  .grid{display:flex;flex-wrap:wrap;gap:var(--sp1);padding-top:2px}
-  .cell{position:relative;width:26px;height:34px;padding:0;border-radius:var(--r1);
-    background:rgba(255,255,255,.035);border:1px solid var(--rule);box-shadow:none}
+  /* Meter, note value, the click grid and the phrase live on the page now: what
+     a drill is configured to do should be legible while you are doing it, not
+     three sections into an overlay you have to open mid-take. */
+  .pattern{flex:0 0 auto;display:grid;gap:var(--sp2);
+    background:var(--panel);border-radius:var(--r2);
+    padding:var(--sp2) var(--sp3) var(--sp3);
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.42), inset 0 2px 5px rgba(0,0,0,.3)}
+  .prow{display:flex;align-items:center;gap:var(--sp3);flex-wrap:wrap}
+  .brow{display:flex;align-items:center;gap:var(--sp2)}
+  .phlen{padding:5px 9px;min-width:34px;font-size:12px}
+
+  /* Cells divide the width rather than wrapping. Sixteenths in 7/8 is 28 of
+     them; wrapping made the block's height depend on the meter, and one bar
+     should read as one row whatever it contains. */
+  .grid{display:flex;gap:3px;width:100%}
+  .cell{position:relative;flex:1 1 0;min-width:0;height:34px;padding:0;
+    border-radius:5px;background:rgba(255,255,255,.035);
+    border:1px solid var(--rule);box-shadow:none}
+  /* Bars are the same control an octave down: shorter, under the beats they group. */
+  .bars{display:flex;gap:3px;flex:1;min-width:0}
+  .bcell{flex:1 1 0;min-width:0;height:16px;padding:0;border-radius:4px;
+    background:rgba(255,255,255,.03);border:1px solid var(--rule);box-shadow:none}
+  .bcell.on{background:var(--ink-dim);border-color:var(--ink-dim)}
+  .bcell.now{box-shadow:0 0 0 2px var(--ink)}
   .cell.beat{border-color:var(--ink-mute)}
   .cell.s1{background:var(--ink-dim);border-color:var(--ink-dim)}
   .cell.s2{background:var(--true);border-color:var(--true);
@@ -300,6 +331,9 @@
     <h1>millitap</h1>
   </span>
   <span class="navs">
+    <button id="gear" class="navbtn" aria-label="Settings" aria-expanded="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a7.07 7.07 0 0 0 .06-.94 7.07 7.07 0 0 0-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.12.22.38.3.6.22l2.39-.96c.49.38 1.03.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.48 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
+    </button>
   <a class="histlink" href="templates.html" aria-label="Drill templates">
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M3 5h13v2H3zM3 10h13v2H3zM3 15h8v2H3z"/>
@@ -316,14 +350,25 @@
   </span>
 </header>
 
-<div class="readout">
-  <div class="hero" id="mLast"><b>—</b><i>last tap</i></div>
-  <div class="hero second"><b id="mSd">—</b><i>spread</i></div>
-  <div class="minor">
-    <span><b id="mMean">—</b><i>average</i></span>
-    <span><b id="mN">0</b><i>taps</i></span>
-    <span><b id="mErr">0<span class="sl"> / </span>0</b><i>missed / extra</i></span>
+<div class="pattern">
+  <div class="prow">
+    <div class="pick" id="meterPick"></div>
+    <div class="pick" id="notePick"></div>
+    <button class="chip sm" type="button" id="feelNow" hidden></button>
   </div>
+  <div class="grid" id="clickGrid"></div>
+  <div class="brow">
+    <div class="bars" id="barGrid"></div>
+    <button class="chip fig phlen" type="button" id="phraseLen"
+      aria-label="Phrase length in bars">4</button>
+  </div>
+</div>
+
+<div class="readout">
+  <span class="stat lead"><b id="mSd">—</b><i>spread</i></span>
+  <span class="stat"><b id="mMean">—</b><i>average</i></span>
+  <span class="stat"><b id="mN">0</b><i>taps</i></span>
+  <span class="stat"><b id="mErr">0<span class="sl"> / </span>0</b><i>missed / extra</i></span>
 </div>
 
 <div class="transport">
@@ -357,38 +402,14 @@
     </svg>
   </button>
   <button id="clear">Clear</button>
-  <button id="gear" class="iconbtn" aria-label="Settings" aria-expanded="false">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a7.07 7.07 0 0 0 .06-.94 7.07 7.07 0 0 0-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.12.22.38.3.6.22l2.39-.96c.49.38 1.03.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.48 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
-  </button>
 </div>
 
 <div id="scrim" hidden></div>
 
 <div id="settings" class="settings" hidden>
   <div class="sect">
-    <h2>Meter</h2>
-    <div class="pick" id="meterPick"></div>
-  </div>
-
-  <div class="sect">
-    <h2>Note value</h2>
-    <div class="pick" id="notePick"></div>
-  </div>
-
-  <div class="sect">
     <h2>Feel <span class="hint" id="feelHint"></span></h2>
     <div class="pick" id="feelPick"></div>
-  </div>
-
-  <div class="sect">
-    <h2>Click <span class="hint">off → on → accent</span></h2>
-    <div class="grid" id="clickGrid"></div>
-  </div>
-
-  <div class="sect">
-    <h2>Phrase <span class="hint">bars · tap to silence the click</span></h2>
-    <div class="pick" id="phrasePick"></div>
-    <div class="grid" id="barGrid"></div>
   </div>
 
 
@@ -458,6 +479,7 @@
 
 <div class="pads" id="pads"></div>
 
+<div id="lastPop" aria-hidden="true"></div>
 <div id="flash" hidden></div>
 <div id="toast">Updated — tap to reload</div>
 
@@ -689,8 +711,24 @@ function tap(voice, perfMs){
     taps.push({t, dev, voice, lag, kind:"hit", k:best.k});
     paint(voice, dev < -4 ? "var(--rush)" : dev > 4 ? "var(--drag)" : "var(--true)");
   }
+  popLast(taps[taps.length-1]);
   if (taps.length > 600) taps = taps.slice(-400);
   stats();
+}
+
+/* Fired from tap() rather than stats(), because stats() also runs when a note is
+   marked missed — and re-flashing the previous tap's number at that moment would
+   report something that did not just happen. */
+let popT = null;
+function popLast(t){
+  const el = $("lastPop");
+  if (t.kind !== "hit"){ el.textContent = "✕"; el.className = "c-miss on"; }
+  else {
+    el.textContent = ms(t.dev);
+    el.className = (t.dev < -4 ? "c-rush" : t.dev > 4 ? "c-drag" : "c-true") + " on";
+  }
+  clearTimeout(popT);
+  popT = setTimeout(() => el.classList.remove("on"), 430);
 }
 
 function flash(v){
@@ -712,14 +750,6 @@ const ms = n => (n>0?"+":n<0?"−":"") + Math.abs(n).toFixed(0);
 
 function stats(){
   const hits = taps.filter(x=>x.kind==="hit");
-  const last = taps[taps.length-1];
-  const lb = $("mLast").querySelector("b");
-  if (!last){ lb.textContent="—"; lb.style.color=""; }
-  else if (last.kind!=="hit"){ lb.textContent="✕"; lb.style.color="var(--miss)"; }
-  else {
-    lb.textContent = ms(last.dev);
-    lb.style.color = last.dev<-4 ? "var(--rush)" : last.dev>4 ? "var(--drag)" : "var(--true)";
-  }
   if (hits.length){
     const m = hits.reduce((a,x)=>a+x.dev,0)/hits.length;
     const sd = Math.sqrt(hits.reduce((a,x)=>a+(x.dev-m)**2,0)/hits.length);
@@ -1135,38 +1165,52 @@ function renderPickers(){
     cp.appendChild(b);
   }
 
+  /* A feel defines its own bar and subdivision, so it stands in for the note
+     glyphs rather than leaving four dead chips beside a disabled meter row. */
+  const fn = $("feelNow");
+  fn.hidden = !cfg.feel;
+  $("notePick").hidden = !!cfg.feel;
+  if (cfg.feel){
+    fn.textContent = cfg.feel.name + "  ×";
+    fn.setAttribute("aria-label", "Clear feel " + cfg.feel.name);
+    fn.onclick = () => { cfg.feel = null; rebuild(); };
+  }
+
   $("feelHint").textContent = cfg.feel ? "own bar — tap again to clear" : "";
 }
 
 /* Bars reuse the click grid's cells, at two states rather than three, so the
    two rows read as the same kind of control at different scales. */
-function renderBars(){
-  const pp=$("phrasePick"); pp.innerHTML="";
-  for (const n of [1,2,4,8]){
-    const b=chip("fig", cfg.bars.length===n);
-    b.textContent=String(n);
-    b.setAttribute("aria-label", n===1 ? "1 bar phrase" : n+" bar phrase");
-    b.onclick=()=>{
-      // Keep what still fits rather than resetting: shortening a phrase should
-      // not silently discard the pattern you just set on its first few bars.
-      const old=cfg.bars;
-      cfg.bars=Array.from({length:n}, (_,i) => i<old.length ? old[i] : 1);
-      cfg.phrase=n; renderBars();
-    };
-    pp.appendChild(b);
-  }
+let barEls = [], lastBar = -1;
 
+function renderBars(){
+  $("phraseLen").textContent = cfg.bars.length;
   const host=$("barGrid"); host.innerHTML="";
+  barEls = []; lastBar = -1;
   cfg.bars.forEach((on,i)=>{
     const b=document.createElement("button");
     b.type="button";
-    b.className="cell beat s"+(on?1:0);
-    b.dataset.n=String(i+1);
-    b.setAttribute("aria-label","bar "+(i+1)+": "+(on?"click sounds":"silent"));
+    b.className="bcell"+(on?" on":"");
+    b.setAttribute("aria-label", "bar "+(i+1)+" of "+cfg.bars.length+": "+
+      (on ? "click sounds" : "silent"));
     b.onclick=()=>{ cfg.bars[i]=cfg.bars[i]?0:1; renderBars(); };
     host.appendChild(b);
+    barEls.push(b);
   });
 }
+
+/* Four values did not earn a row of chips, so the length cycles through one
+   control sitting at the end of the strip it describes. */
+$("phraseLen").onclick = () => {
+  const opts = [1,2,4,8];
+  const n = opts[(opts.indexOf(cfg.bars.length) + 1) % opts.length];
+  // Keep what still fits: shortening should not silently discard the pattern you
+  // just set on the first few bars.
+  const old = cfg.bars;
+  cfg.bars = Array.from({length:n}, (_,i) => i < old.length ? old[i] : 1);
+  cfg.phrase = n;
+  renderBars();
+};
 
 /* While ramping, the readout shows the tempo you are actually hearing. The
    slider keeps meaning the tempo the ramp starts from, so the two do not fight. */
@@ -1207,11 +1251,19 @@ function renderGrid(){
    ctx.currentTime — otherwise it leads the click you are playing against, which
    on Bluetooth would be by a visible fraction of a beat. */
 function playhead(){
-  let i = -1;
+  let i = -1, bar = -1;
   if (running && ctx && gridEls.length){
     const sub = gridSub(), cells = cfg.click.length;
     const n = Math.floor(beatsAt(ctx.currentTime - latency() - startTime) * sub);
     i = ((n % cells) + cells) % cells;      // count-in runs negative
+    const P = cfg.bars.length;
+    // The count-in belongs to no bar of the phrase, so it lights none of them.
+    bar = n < 0 ? -1 : ((Math.floor(n/cells) % P) + P) % P;
+  }
+  if (bar !== lastBar){
+    if (barEls[lastBar]) barEls[lastBar].classList.remove("now");
+    if (barEls[bar]) barEls[bar].classList.add("now");
+    lastBar = bar;
   }
   if (i === lastCell) return;
   if (gridEls[lastCell]) gridEls[lastCell].classList.remove("now");
