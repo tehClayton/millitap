@@ -67,7 +67,7 @@
     flex:0 0 auto;padding:0 var(--sp1)}
   .brand{display:flex;align-items:center;gap:var(--sp2)}
   .topbar h1{font-size:13px;font-weight:600;color:var(--ink);letter-spacing:.05em}
-  .histlink{justify-self:end;display:flex;padding:var(--sp1);color:var(--ink-mute)}
+  .histlink{display:flex;padding:var(--sp1);color:var(--ink-mute)}
   .histlink svg{width:17px;height:17px;fill:currentColor;display:block}
   .mark{width:19px;height:19px;flex:0 0 auto}
   .mark line{stroke:var(--true);stroke-width:1.7;stroke-linecap:round}
@@ -225,6 +225,12 @@
   .advbtn[aria-expanded="true"]{color:var(--ink)}
   .advbtn[aria-expanded="true"] .chev{transform:rotate(90deg)}
   #advBody{display:grid;gap:var(--sp3);padding-top:var(--sp3)}
+  .navs{justify-self:end;display:flex;align-items:center;gap:2px}
+  #flash{position:fixed;left:50%;transform:translateX(-50%);
+    top:calc(var(--sp4) + env(safe-area-inset-top));
+    background:var(--panel-hi);border:1px solid var(--true);color:var(--ink);
+    padding:9px 15px;border-radius:var(--r1);font-size:12px;z-index:30;
+    box-shadow:0 10px 28px rgba(0,0,0,.5);pointer-events:none}
 
   .pick{display:flex;flex-wrap:wrap;gap:var(--sp2)}
   .chip{padding:8px 12px;font-size:12px;border-radius:var(--r1);
@@ -293,6 +299,13 @@
     </svg>
     <h1>millitap</h1>
   </span>
+  <span class="navs">
+  <a class="histlink" href="templates.html" aria-label="Drill templates">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 5h13v2H3zM3 10h13v2H3zM3 15h8v2H3z"/>
+      <path d="M17.4 13.6v2.9h-2.9v2h2.9v2.9h2v-2.9h2.9v-2h-2.9v-2.9z"/>
+    </svg>
+  </a>
   <a class="histlink" href="history.html" aria-label="Practice history">
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <rect x="3" y="13" width="4.6" height="8" rx="1.2"/>
@@ -300,6 +313,7 @@
       <rect x="16.4" y="10" width="4.6" height="11" rx="1.2"/>
     </svg>
   </a>
+  </span>
 </header>
 
 <div class="readout">
@@ -333,8 +347,15 @@
       <button class="tval" id="tSecs" type="button" hidden role="spinbutton"
         aria-label="Ramp duration in seconds" aria-valuemin="5" aria-valuemax="600" aria-valuenow="30"><b>30</b><i>sec</i></button>
       <span class="tval live" id="tNow" hidden><b>—</b><i>now</i></span>
+      <span class="tval live" id="tStep" hidden><b>–/–</b><i>step</i></span>
     </div>
   </div>
+  <button id="tAdd" class="iconbtn" type="button" aria-label="Add these settings to a template">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 5h13v2H3zM3 10h13v2H3zM3 15h8v2H3z"/>
+      <path d="M17.4 13.6v2.9h-2.9v2h2.9v2.9h2v-2.9h2.9v-2h-2.9v-2.9z"/>
+    </svg>
+  </button>
   <button id="clear">Clear</button>
   <button id="gear" class="iconbtn" aria-label="Settings" aria-expanded="false">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a7.07 7.07 0 0 0 .06-.94 7.07 7.07 0 0 0-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.12.22.38.3.6.22l2.39-.96c.49.38 1.03.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.48 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
@@ -437,9 +458,11 @@
 
 <div class="pads" id="pads"></div>
 
+<div id="flash" hidden></div>
 <div id="toast">Updated — tap to reload</div>
 
 <script src="store.js"></script>
+<script src="ui.js"></script>
 <script>
 "use strict";
 
@@ -752,6 +775,7 @@ function draw(ts){
 
   playhead();
   liveTempo();
+  tickTemplate();
 
   if (!W) return;
   const now = ctx ? ctx.currentTime : 0;
@@ -920,7 +944,13 @@ addEventListener("keydown", e => {
 });
 
 /* ============================== transport ============================== */
-function toggle(){ running ? stop() : start(); }
+function toggle(){
+  if (running){ stop(); tplIdx = -1; renderTemplates(); return; }
+  // Pressing play with a template selected starts it at the top.
+  if (tplSel && tplSel.steps.length){ tplIdx = 0; applyStep(tplSel.steps[0]); }
+  start();
+  renderTemplates();
+}
 
 function start(){
   if (!ctx) ctx = new (window.AudioContext||window.webkitAudioContext)({latencyHint:"interactive"});
@@ -1238,47 +1268,131 @@ function renderTempo(){
   $("tRamp").setAttribute("aria-pressed", String(on));
 }
 
-function scrub(id){
-  const el = $(id), f = TF[id];
-  let base = 0, y0 = 0, live = false;
+/* scrubEl lives in ui.js: the templates page needs the same gesture on its
+   step-length fields, and two copies of a pointer-capture handler is how they
+   end up behaving differently. */
+for (const id in TF)
+  scrubEl($(id), Object.assign({}, TF[id],
+    { set: v => setField(id, v), commit: commitTempo }));
 
-  el.addEventListener("pointerdown", e => {
-    live = true; base = f.get(); y0 = e.clientY;
-    el.setPointerCapture(e.pointerId);
-    el.classList.add("drag");
-    e.preventDefault();
-  });
+/* ============================== templates ==============================
+   A template is an ordered list of steps, each a full snapshot of the drill
+   settings plus a length in bars or seconds. Steps are captured from the live
+   configuration rather than built in a separate editor: you set a drill up the
+   way you always do, then keep it.
 
-  el.addEventListener("pointermove", e => {
-    if (!live) return;
-    // Screen y grows downward, so subtracting puts "up" on the positive side.
-    setField(id, base + Math.round((y0 - e.clientY) / f.px) * f.step);
-  });
+   Each step runs as its own drill — stop, apply, start — so it lands in history
+   as its own session under its own bucket, and gets a count-in before a new
+   tempo or meter. Splicing a config change into a running scheduler would mean
+   unpicking whatever the lookahead window had already queued. */
+let tplSel = null;   // the chosen template, or null
+let tplIdx = -1;     // step currently playing, -1 when not running one
 
-  const end = e => {
-    if (!live) return;
-    live = false;
-    el.classList.remove("drag");
-    if (el.hasPointerCapture && el.hasPointerCapture(e.pointerId))
-      el.releasePointerCapture(e.pointerId);
-    commitTempo();
-  };
-  el.addEventListener("pointerup", end);
-  el.addEventListener("pointercancel", end);
-
-  /* A drag is not reachable from a keyboard, and the slider this replaced was.
-     role=spinbutton means the arrows are what a screen reader will announce. */
-  el.addEventListener("keydown", e => {
-    const up = e.key==="ArrowUp"   || e.key==="PageUp";
-    const dn = e.key==="ArrowDown" || e.key==="PageDown";
-    if (!up && !dn) return;
-    e.preventDefault();
-    const mult = (e.key==="PageUp" || e.key==="PageDown") ? 10 : 1;
-    setField(id, f.get() + (up ? 1 : -1) * f.step * mult);
-    commitTempo();
-  });
+function stepLabel(st){
+  const f = st.feel && FEELS.find(x => x.id === st.feel);
+  const n = NOTES.find(x => x.id === st.note);
+  const base = f ? f.name : st.meter + " · " + (n ? n.name.toLowerCase() : st.note);
+  return base + " · " + st.bpm + (st.ramp && st.ramp.on ? "→" + st.ramp.to : "");
 }
-for (const id in TF) scrub(id);
+
+function snapshotStep(){
+  const st = {
+    len:{ u:"bars", n:8 },
+    bpm: cfg.bpm,
+    meter: cfg.meter.id, note: cfg.note.id, feel: cfg.feel ? cfg.feel.id : null,
+    beats: cfg.pattern.beats,
+    pads: cfg.pads, padMode: cfg.padMode, countIn: cfg.countIn,
+    click: cfg.click.slice(), bars: cfg.bars.slice(),
+    ramp: { on:cfg.ramp.on, to:cfg.ramp.to, secs:cfg.ramp.secs }
+  };
+  /* Label and bar count are baked in at capture so the templates page can render
+     a step without importing the meter, note and feel tables that name it. */
+  st.label = stepLabel(st);
+  return st;
+}
+
+function applyStep(st){
+  cfg.bpm   = st.bpm;
+  cfg.meter = METERS.find(m => m.id === st.meter) || METERS[0];
+  cfg.note  = NOTES.find(n => n.id === st.note)   || NOTES[0];
+  cfg.feel  = st.feel ? (FEELS.find(f => f.id === st.feel) || null) : null;
+  cfg.pads  = st.pads; cfg.padMode = st.padMode; cfg.countIn = st.countIn;
+  cfg.ramp  = { on:st.ramp.on, to:st.ramp.to, secs:st.ramp.secs };
+  buildPattern();
+  /* A stored grid only fits the pattern it was captured against. If a template
+     ever holds an inconsistent one, rebuild rather than index off the end. */
+  if (st.click && st.click.length === cfg.pattern.beats * gridSub())
+    cfg.click = st.click.slice();
+  else defaultClick();
+  cfg.bars = (st.bars && st.bars.length) ? st.bars.slice() : [1];
+  cfg.phrase = cfg.bars.length;
+  buildPads();
+  renderPickers(); renderGrid(); renderBars(); renderTempo();
+}
+
+function stepDone(){
+  if (tplIdx < 0 || !running || !ctx || !tplSel) return false;
+  const st = tplSel.steps[tplIdx];
+  const t = ctx.currentTime - startTime;
+  if (t <= 0) return false;                       // still counting in
+  return st.len.u === "sec" ? t >= st.len.n
+                            : beatsAt(t) >= st.len.n * cfg.pattern.beats;
+}
+
+function tickTemplate(){
+  if (!stepDone()) return;
+  const last = tplIdx + 1 >= tplSel.steps.length;
+  stop();        // captures the step just played as its own session
+  clearAll();    // and resets the readout so the next one starts clean
+  if (last){ tplIdx = -1; renderTemplates(); return; }
+  tplIdx++;
+  applyStep(tplSel.steps[tplIdx]);
+  start();
+  renderTemplates();
+}
+
+/* Composing a template happens on its own page. The drill page keeps the two
+   things that only make sense here: running the selected template, and adding
+   the drill you have just dialled in to it. */
+function renderTemplates(){
+  const show = !!tplSel && tplSel.steps.length > 0;
+  const ind = $("tStep");
+  ind.hidden = !show;
+  if (show) ind.querySelector("b").textContent =
+    (tplIdx >= 0 ? tplIdx + 1 : "–") + "/" + tplSel.steps.length;
+  $("tAdd").setAttribute("aria-label",
+    tplSel ? "Add these settings to " + tplSel.name : "Add these settings to a new template");
+}
+
+let flashT = null;
+function flash(msg){
+  const f = $("flash");
+  f.textContent = msg;
+  f.hidden = false;
+  clearTimeout(flashT);
+  flashT = setTimeout(() => { f.hidden = true; }, 1900);
+}
+
+$("tAdd").onclick = () => {
+  let t = tplSel;
+  if (!t){
+    // No template open: make one rather than making you go somewhere else first.
+    const name = prompt("New template name", "Drill " + (Store.templates().length + 1));
+    if (!name || !name.trim()) return;
+    t = { id:"t" + Date.now().toString(36), name:name.trim().slice(0,40), steps:[] };
+    tplSel = t;
+    Store.setActiveTemplate(t.id);
+  }
+  t.steps.push(snapshotStep());
+  Store.putTemplate(t);
+  renderTemplates();
+  flash("Added to " + t.name + " · " + t.steps.length +
+        " step" + (t.steps.length===1 ? "" : "s"));
+};
+
+/* The templates page owns which template is open; a full navigation is the only
+   thing between the two pages, so reading it at load is enough. */
+tplSel = Store.templates().find(t => t.id === Store.activeTemplate()) || null;
 
 $("tRamp").onclick = () => {
   cfg.ramp.on = !cfg.ramp.on;
@@ -1330,7 +1444,7 @@ $("stress").onchange = e => {
   } else { jank = 0; }
 };
 
-renderPickers(); renderGrid(); renderBars(); renderTempo();
+renderPickers(); renderGrid(); renderBars(); renderTempo(); renderTemplates();
 buildPads(); resize(); stats();
 
 /* ============================== install ============================== */
