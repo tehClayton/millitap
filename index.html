@@ -285,17 +285,23 @@
   /* Cells divide the width rather than wrapping. Sixteenths in 7/8 is 28 of
      them; wrapping made the block's height depend on the meter, and one bar
      should read as one row whatever it contains. */
-  /* Fixed cells again rather than dividing a width: on one shared line the grid
-     cannot claim the row, so each cell keeps a known size and the strip grows
-     sideways with the meter instead of squeezing. */
-  .grid{display:flex;gap:2px}
-  .cell{position:relative;flex:0 0 auto;width:24px;height:32px;padding:0;
+  /* Fixed footprint, variable cells. With fixed-size cells the grid's width
+     lurched from about 100px at 4/4 quarters to 730 at 7/8 sixteenths, dragging
+     everything after it and making a scroll position mean nothing. Capping the
+     width instead pins the strip: cells sit at a comfortable 24px while there is
+     room and compress once there is not.
+
+     The trade is honest — 28 sixteenths land near 10px, which is a grid you can
+     read but not comfortably aim at. Dense meters give up tap size to stay
+     visible whole. */
+  .grid{display:flex;gap:2px;max-width:340px}
+  .cell{position:relative;flex:1 1 24px;min-width:9px;height:32px;padding:0;
     border-radius:4px;background:rgba(255,255,255,.035);
     border:1px solid var(--rule);box-shadow:none}
   /* Bars are the same control at bar scale. Shorter, so that beside the beat
      cells rather than beneath them they still read as the coarser timeline. */
-  .bars{display:flex;gap:2px}
-  .bcell{flex:0 0 auto;width:20px;height:18px;padding:0;border-radius:3px;
+  .bars{display:flex;gap:2px;max-width:112px}
+  .bcell{flex:1 1 22px;min-width:8px;height:18px;padding:0;border-radius:3px;
     background:rgba(255,255,255,.03);border:1px solid var(--rule);box-shadow:none}
   .bcell.on{background:var(--ink-dim);border-color:var(--ink-dim)}
   .bcell.now{box-shadow:0 0 0 2px var(--ink)}
