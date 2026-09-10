@@ -1409,7 +1409,11 @@ function drillLabel(st){
 
 function snapshotDrill(){
   const st = {
-    len:{ u:"bars", n:8 },
+    /* A ramp has a length of its own. End the drill before it finishes and the
+       target tempo is never reached, so the ramp's duration is the only default
+       that makes sense — and it has to be measured in seconds, since that is
+       what the ramp is defined in. Fixed-tempo drills keep the bar count. */
+    len: rampOn() ? { u:"sec", n:cfg.ramp.secs } : { u:"bars", n:8 },
     bpm: cfg.bpm,
     meter: cfg.meter.id, note: cfg.note.id, feel: cfg.feel ? cfg.feel.id : null,
     beats: cfg.pattern.beats,
