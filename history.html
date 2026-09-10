@@ -588,8 +588,8 @@ function download(name, text, type){
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-/* One file carries sessions and templates both, because "back up millitap" is
-   the thing a person wants. Same file the templates page reads and writes. */
+/* One file carries sessions and sets both, because "back up millitap" is the
+   thing a person wants. Same file the set editor reads and writes. */
 $("exportBtn").onclick = () => {
   const d = new Date(), p = n => String(n).padStart(2,"0");
   const stamp = d.getFullYear() + p(d.getMonth()+1) + p(d.getDate());
@@ -612,7 +612,7 @@ $("importFile").onchange = e => {
     if (!res) return alert("That file is not a millitap backup.");
     if (!res.ok) return alert("Import failed — storage may be full.");
     alert("Imported " + res.sessions + " session" + (res.sessions===1?"":"s") +
-      " and " + res.templates + " template" + (res.templates===1?"":"s") +
+      " and " + res.sets + " set" + (res.sets===1?"":"s") +
       (res.replaced ? ", replacing " + res.replaced : "") +
       (res.skipped ? ". Skipped " + res.skipped + " already present." : "."));
     boot();
