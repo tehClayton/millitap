@@ -96,6 +96,7 @@
   #run.on .i-play{display:none}
   #run.on .i-stop{display:block}
   #gear.on{background:var(--panel-hi);border-color:var(--ink-mute);color:var(--ink)}
+  #setsBtn.live{background:var(--panel-hi);border-color:var(--true);color:var(--true)}
   /* Each number is its own control, scrubbed vertically the way a DAW does it.
      That removes the slider and with it the "which field am I editing" mode a
      single track forced, and lets each field carry its own resolution — one bpm
@@ -116,6 +117,20 @@
   .tval i{font-style:normal;font-size:8px;letter-spacing:.12em;text-transform:uppercase;
     color:var(--ink-mute);line-height:1}
   .tval.drag{background:var(--panel-hi);border-color:var(--true)}
+  /* Every scrubbable field takes pointer input past its painted box, so a thumb
+     can start the drag from above or below instead of landing on the value it is
+     about to change. A pseudo-element does it: nothing is drawn and no layout
+     moves, the target simply reaches further than the paint.
+
+     How far it may reach is set by whatever sits next to it, so it is a variable
+     rather than a constant. In the transport there are 8px row gaps to spend. In
+     a set's drill list the next field is only 12px below, and two 12px reaches
+     would overlap in the middle — you would aim at one row's length and get its
+     neighbour's — so there it halves. */
+  .tval, .tramp{position:relative; --reach:5px}
+  .tempo .tval, .tempo .tramp{--reach:12px}
+  .tval::before, .tramp::before{content:"";position:absolute;left:0;right:0;
+    top:calc(0px - var(--reach));bottom:calc(0px - var(--reach))}
   .tval.drag i{color:var(--ink-dim)}
   .tval:focus-visible{outline:2px solid var(--true);outline-offset:2px}
   /* The live readout is output, not input: no raised face, nothing to grab. */
@@ -212,6 +227,41 @@
     overflow-y:auto;-webkit-overflow-scrolling:touch}
   #scrim{position:fixed;inset:0;z-index:19;background:rgba(5,9,13,.62);
     -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+
+  /* Only visible while a set is playing: the transport says what is running
+     without a control that has to mean something the rest of the time. */
+  .runchip{display:flex;align-items:center;gap:7px;flex:0 0 auto;
+    padding:8px 12px;font-size:12px;border-radius:var(--r1);color:var(--ink);
+    background:var(--panel-hi);border:1px solid var(--true);
+    box-shadow:0 0 18px -8px var(--true)}
+  .runchip .rn{font-family:var(--fig);color:var(--true)}
+
+  .setrow{border-top:1px solid var(--rule);padding-top:var(--sp2);margin-top:var(--sp2)}
+  .setrow:first-child{border-top:none;padding-top:0;margin-top:0}
+  .sethead{display:flex;align-items:center;gap:var(--sp2)}
+  .sethead b{font-size:13px;font-weight:600;color:var(--ink)}
+  .sethead .grow{flex:1;min-width:0}
+  .setdrills{display:grid;gap:2px;padding-top:var(--sp2)}
+  .drill{display:flex;align-items:center;gap:var(--sp2);padding:5px 6px;
+    border-radius:var(--r1);background:rgba(255,255,255,.022)}
+  .drill.now{background:rgba(127,203,143,.1)}
+  .sn{font-family:var(--fig);font-size:11px;color:var(--ink-mute);
+    min-width:2ch;text-align:right;flex:0 0 auto}
+  .sinfo{flex:1;min-width:0;display:grid;gap:2px}
+  .sinfo b{font-size:12px;font-weight:500;color:var(--ink);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sinfo i{font-style:normal;font-family:var(--fig);font-size:9px;color:var(--ink-mute)}
+  .sctl{display:flex;align-items:center;gap:3px;flex:0 0 auto}
+  .slen{min-width:44px;padding:6px 6px;gap:0}
+  .slen b{font-size:15px}
+  .mini.unit{font-family:var(--fig);color:var(--ink);min-width:40px}
+  .mini{padding:6px 8px;font-size:11px;min-width:28px;line-height:1;
+    border-radius:var(--r1);color:var(--ink-dim);font-family:inherit;
+    background:linear-gradient(var(--raise-a),var(--raise-b));
+    border:1px solid var(--rule);box-shadow:inset 0 1px 0 rgba(255,255,255,.055)}
+  .mini.warn{color:var(--miss);border-color:rgba(194,86,107,.4)}
+  .mini.go{color:var(--true);border-color:rgba(127,203,143,.45)}
+  .ct{color:var(--ink-mute);font-family:var(--fig);font-size:11px;margin-left:6px}
 
   .sect{display:grid;gap:var(--sp2);padding:var(--sp3) var(--sp4)}
   .sect + .sect{border-top:1px solid var(--rule)}
@@ -353,15 +403,6 @@
     <h1>millitap</h1>
   </span>
   <span class="navs">
-    <button id="gear" class="navbtn" aria-label="Settings" aria-expanded="false">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a7.07 7.07 0 0 0 .06-.94 7.07 7.07 0 0 0-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.12.22.38.3.6.22l2.39-.96c.49.38 1.03.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.48 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
-    </button>
-  <a class="histlink" href="templates.html" aria-label="Drill templates">
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M3 5h13v2H3zM3 10h13v2H3zM3 15h8v2H3z"/>
-      <path d="M17.4 13.6v2.9h-2.9v2h2.9v2.9h2v-2.9h2.9v-2h-2.9v-2.9z"/>
-    </svg>
-  </a>
   <a class="histlink" href="history.html" aria-label="Practice history">
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <rect x="3" y="13" width="4.6" height="8" rx="1.2"/>
@@ -369,6 +410,9 @@
       <rect x="16.4" y="10" width="4.6" height="11" rx="1.2"/>
     </svg>
   </a>
+    <button id="gear" class="navbtn" aria-label="Settings" aria-expanded="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a7.07 7.07 0 0 0 .06-.94 7.07 7.07 0 0 0-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.12.22.38.3.6.22l2.39-.96c.49.38 1.03.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.48 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
+    </button>
   </span>
 </header>
 
@@ -412,19 +456,40 @@
       <button class="tval" id="tSecs" type="button" hidden role="spinbutton"
         aria-label="Ramp duration in seconds" aria-valuemin="5" aria-valuemax="600" aria-valuenow="30"><b>30</b><i>sec</i></button>
       <span class="tval live" id="tNow" hidden><b>—</b><i>now</i></span>
-      <span class="tval live" id="tStep" hidden><b>–/–</b><i>step</i></span>
     </div>
   </div>
-  <button id="tAdd" class="iconbtn" type="button" aria-label="Add these settings to a template">
+  <button class="iconbtn" id="setsBtn" type="button" aria-label="Drill sets"
+    aria-expanded="false">
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M3 5h13v2H3zM3 10h13v2H3zM3 15h8v2H3z"/>
       <path d="M17.4 13.6v2.9h-2.9v2h2.9v2.9h2v-2.9h2.9v-2h-2.9v-2.9z"/>
     </svg>
   </button>
-  <button id="clear">Clear</button>
+  <button class="runchip" id="runChip" type="button" hidden></button>
 </div>
 
 <div id="scrim" hidden></div>
+
+<div id="setsModal" class="settings" hidden>
+  <div class="sect">
+    <h2>Add this drill to <span class="hint" id="setsNow"></span></h2>
+    <div class="pick" id="setsAddPick"></div>
+  </div>
+  <div class="sect">
+    <h2>Sets <span class="hint">run one, or open it to edit</span></h2>
+    <div id="setsList"></div>
+    <p class="note" id="setsEmpty" hidden>No sets yet. Add this drill to a new one above
+      and it becomes its first drill.</p>
+  </div>
+  <div class="sect">
+    <h2>Backup <span class="hint">sessions and sets, one file</span></h2>
+    <div class="pick">
+      <button type="button" id="expBtn">Export all data</button>
+      <button type="button" id="impBtn">Import backup</button>
+      <input type="file" id="impFile" accept="application/json,.json" hidden>
+    </div>
+  </div>
+</div>
 
 <div id="settings" class="settings" hidden>
 
@@ -534,7 +599,7 @@ const NOTES = [
 /* Feels carry microtiming or a fixed shape that only makes sense at a set bar
    length, so each defines its own and overrides the meter while selected. */
 /* short is what fits on the drill page; name is what a session bucket or a
-   template step is called, where there is room to be unambiguous. */
+   a set's drill is called, where there is room to be unambiguous. */
 const FEELS = [
   {id:"sw67",  short:"swing",     name:"Swung — triplet",   beats:4, on:seq(8,0.5, 1/6)},
   {id:"sw58",  short:"light swing", name:"Swung — light",   beats:4, on:seq(8,0.5, 0.085)},
@@ -822,7 +887,7 @@ function draw(ts){
 
   playhead();
   liveTempo();
-  tickTemplate();
+  tickSet();
 
   if (!W) return;
   const now = ctx ? ctx.currentTime : 0;
@@ -984,19 +1049,22 @@ function buildPads(){
 
 addEventListener("keydown", e => {
   if (e.repeat) return;
-  if (e.key==="Escape"){ setSettings(false); return; }
+  if (e.key==="Escape"){ setSettings(false); showSets(false); return; }
   if (e.code==="Space"){ e.preventDefault(); toggle(); return; }
   const n = parseInt(e.key,10);
   if (n>=1 && n<=cfg.pads && ctx){ e.preventDefault(); tap(n-1, e.timeStamp); }
 });
 
 /* ============================== transport ============================== */
+/* Play is always this drill, exactly as configured. A set runs only
+   because you pressed run on it in the modal, so the button in front of you
+   never does something you did not just ask for. */
 function toggle(){
-  if (running){ stop(); tplIdx = -1; renderTemplates(); return; }
-  // Pressing play with a template selected starts it at the top.
-  if (tplSel && tplSel.steps.length){ tplIdx = 0; applyStep(tplSel.steps[0]); }
+  if (running){ stop(); runSet = null; runIdx = -1; renderRun(); return; }
+  runSet = null; runIdx = -1;
+  clearAll();     // every run starts a fresh count, which is what Clear was for
   start();
-  renderTemplates();
+  renderRun();
 }
 
 function start(){
@@ -1327,36 +1395,40 @@ function renderTempo(){
   $("tRamp").setAttribute("aria-pressed", String(on));
 }
 
-/* scrubEl lives in ui.js: the templates page needs the same gesture on its
-   step-length fields, and two copies of a pointer-capture handler is how they
+/* scrubEl lives in ui.js: the set editor needs the same gesture on its
+   drill-length fields, and two copies of a pointer-capture handler is how they
    end up behaving differently. */
 for (const id in TF)
   scrubEl($(id), Object.assign({}, TF[id],
     { set: v => setField(id, v), commit: commitTempo }));
 
-/* ============================== templates ==============================
-   A template is an ordered list of steps, each a full snapshot of the drill
-   settings plus a length in bars or seconds. Steps are captured from the live
-   configuration rather than built in a separate editor: you set a drill up the
-   way you always do, then keep it.
+/* ================================ sets ================================
+   A set is an ordered list of drills, each a full snapshot of the drill
+   settings plus a length in bars or seconds. Drills are captured from the live
+   configuration rather than built in a separate editor: you set one up the way
+   you always do, then keep it.
 
-   Each step runs as its own drill — stop, apply, start — so it lands in history
-   as its own session under its own bucket, and gets a count-in before a new
-   tempo or meter. Splicing a config change into a running scheduler would mean
-   unpicking whatever the lookahead window had already queued. */
-let tplSel = null;   // the chosen template, or null
-let tplIdx = -1;     // step currently playing, -1 when not running one
+   Each drill in a set runs as its own drill — stop, apply, start — so it lands
+   in history as its own session under its own bucket, and gets a count-in
+   before a new tempo or meter. Splicing a config change into a running
+   scheduler would mean unpicking whatever the lookahead had already queued. */
+let runSet = null;   // the set currently playing, or null
+let runIdx = -1;     // step currently playing, -1 when not running one
 
-function stepLabel(st){
+function drillLabel(st){
   const f = st.feel && FEELS.find(x => x.id === st.feel);
   const n = NOTES.find(x => x.id === st.note);
   const base = f ? f.name : st.meter + " · " + (n ? n.name.toLowerCase() : st.note);
   return base + " · " + st.bpm + (st.ramp && st.ramp.on ? "→" + st.ramp.to : "");
 }
 
-function snapshotStep(){
+function snapshotDrill(){
   const st = {
-    len:{ u:"bars", n:8 },
+    /* A ramp has a length of its own. End the drill before it finishes and the
+       target tempo is never reached, so the ramp's duration is the only default
+       that makes sense — and it has to be measured in seconds, since that is
+       what the ramp is defined in. Fixed-tempo drills keep the bar count. */
+    len: rampOn() ? { u:"sec", n:cfg.ramp.secs } : { u:"bars", n:8 },
     bpm: cfg.bpm,
     meter: cfg.meter.id, note: cfg.note.id, feel: cfg.feel ? cfg.feel.id : null,
     beats: cfg.pattern.beats,
@@ -1364,13 +1436,13 @@ function snapshotStep(){
     click: cfg.click.slice(), bars: cfg.bars.slice(),
     ramp: { on:cfg.ramp.on, to:cfg.ramp.to, secs:cfg.ramp.secs }
   };
-  /* Label and bar count are baked in at capture so the templates page can render
-     a step without importing the meter, note and feel tables that name it. */
-  st.label = stepLabel(st);
+  /* Label and bar count are baked in at capture so the set editor can render a
+     drill without importing the meter, note and feel tables that name it. */
+  st.label = drillLabel(st);
   return st;
 }
 
-function applyStep(st){
+function applyDrill(st){
   cfg.bpm   = st.bpm;
   cfg.meter = METERS.find(m => m.id === st.meter) || METERS[0];
   cfg.note  = NOTES.find(n => n.id === st.note)   || NOTES[0];
@@ -1378,8 +1450,8 @@ function applyStep(st){
   cfg.pads  = st.pads; cfg.padMode = st.padMode; cfg.countIn = st.countIn;
   cfg.ramp  = { on:st.ramp.on, to:st.ramp.to, secs:st.ramp.secs };
   buildPattern();
-  /* A stored grid only fits the pattern it was captured against. If a template
-     ever holds an inconsistent one, rebuild rather than index off the end. */
+  /* A stored grid only fits the pattern it was captured against. If a set ever
+     holds an inconsistent one, rebuild rather than index off the end. */
   if (st.click && st.click.length === cfg.pattern.beats * gridSub())
     cfg.click = st.click.slice();
   else defaultClick();
@@ -1389,39 +1461,35 @@ function applyStep(st){
   renderPickers(); renderGrid(); renderBars(); renderTempo();
 }
 
-function stepDone(){
-  if (tplIdx < 0 || !running || !ctx || !tplSel) return false;
-  const st = tplSel.steps[tplIdx];
+function drillDone(){
+  if (runIdx < 0 || !running || !ctx || !runSet) return false;
+  const st = runSet.drills[runIdx];
   const t = ctx.currentTime - startTime;
   if (t <= 0) return false;                       // still counting in
   return st.len.u === "sec" ? t >= st.len.n
                             : beatsAt(t) >= st.len.n * cfg.pattern.beats;
 }
 
-function tickTemplate(){
-  if (!stepDone()) return;
-  const last = tplIdx + 1 >= tplSel.steps.length;
+function tickSet(){
+  if (!drillDone()) return;
+  const last = runIdx + 1 >= runSet.drills.length;
   stop();        // captures the step just played as its own session
   clearAll();    // and resets the readout so the next one starts clean
-  if (last){ tplIdx = -1; renderTemplates(); return; }
-  tplIdx++;
-  applyStep(tplSel.steps[tplIdx]);
+  if (last){ runSet = null; runIdx = -1; renderRun(); return; }
+  runIdx++;
+  applyDrill(runSet.drills[runIdx]);
   start();
-  renderTemplates();
+  renderRun();
 }
 
-/* Composing a template happens on its own page. The drill page keeps the two
-   things that only make sense here: running the selected template, and adding
-   the drill you have just dialled in to it. */
-function renderTemplates(){
-  const show = !!tplSel && tplSel.steps.length > 0;
-  const ind = $("tStep");
-  ind.hidden = !show;
-  if (show) ind.querySelector("b").textContent =
-    (tplIdx >= 0 ? tplIdx + 1 : "–") + "/" + tplSel.steps.length;
-  $("tAdd").setAttribute("aria-label",
-    tplSel ? "Add these settings to " + tplSel.name : "Add these settings to a new template");
-}
+/* There is no set "mode" any more, and that is the point. An armed set that
+   play would silently pick up conflated three separate things: which set you
+   are editing, which one is about to run, and whether the app is in a set state
+   at all. Each is now its own act.
+
+   runSet means only "the set currently playing". Nothing is armed; nothing
+   persists between sessions; play never does something you did not just ask for. */
+let openSetId = null;   // id of the set expanded for editing in the modal
 
 let flashT = null;
 function flash(msg){
@@ -1432,26 +1500,244 @@ function flash(msg){
   flashT = setTimeout(() => { f.hidden = true; }, 1900);
 }
 
-$("tAdd").onclick = () => {
-  let t = tplSel;
-  if (!t){
-    // No template open: make one rather than making you go somewhere else first.
-    const name = prompt("New template name", "Drill " + (Store.templates().length + 1));
-    if (!name || !name.trim()) return;
-    t = { id:"t" + Date.now().toString(36), name:name.trim().slice(0,40), steps:[] };
-    tplSel = t;
-    Store.setActiveTemplate(t.id);
+const saveSet = t => Store.putSet(t);
+
+/* Only ever shown while something is running, so the transport gains a control
+   that is unambiguous rather than one that means different things at rest. */
+function renderRun(){
+  const chip = $("runChip"), on = !!runSet && runIdx >= 0;
+  chip.hidden = !on;
+  if (on) chip.innerHTML = runSet.name +
+    ' <span class="rn">' + (runIdx + 1) + '/' + runSet.drills.length + '</span>';
+}
+
+function playSet(t){
+  if (!t.drills.length) return;
+  if (running) stop();
+  runSet = t; runIdx = 0;
+  applyDrill(t.drills[0]);
+  clearAll();
+  start();
+  showSets(false);
+  renderRun();
+  flash("Running " + t.name);
+}
+
+function addToSet(t){
+  t.drills.push(snapshotDrill());
+  saveSet(t);
+  openSetId = t.id;                 // show what you just did rather than announcing it
+  renderSetModal();
+  flash("Added to " + t.name + " · " + t.drills.length +
+        " drill" + (t.drills.length === 1 ? "" : "s"));
+}
+
+function newSet(){
+  const name = prompt("Name this set", "Set " + (Store.sets().length + 1));
+  if (!name || !name.trim()) return null;
+  const t = { id:"t" + Date.now().toString(36), name:name.trim().slice(0,40), steps:[] };
+  saveSet(t);
+  return t;
+}
+
+function mini(text, label, fn, cls){
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "mini" + (cls ? " " + cls : "");
+  b.textContent = text;
+  if (label) b.setAttribute("aria-label", label);
+  b.onclick = fn;
+  return b;
+}
+
+function renderSteps(t, host){
+  host.innerHTML = "";
+  t.drills.forEach((st, i) => {
+    const row = document.createElement("div");
+    row.className = "drill" + (runSet && runSet.id === t.id && i === runIdx ? " now" : "");
+
+    const n = document.createElement("span");
+    n.className = "sn"; n.textContent = String(i + 1);
+
+    const info = document.createElement("div");
+    info.className = "sinfo";
+    const nb = document.createElement("b");
+    nb.textContent = st.label || (st.meter + " · " + st.bpm);
+    const sub = document.createElement("i");
+    const secs = st.len.u === "sec";
+    const dur = () => st.len.n + " " + st.len.u + " · " + mmss(Store.drillSeconds(st));
+    sub.textContent = dur();
+    info.appendChild(nb); info.appendChild(sub);
+
+    const len = document.createElement("button");
+    len.type = "button"; len.className = "tval slen";
+    len.setAttribute("role", "spinbutton");
+    len.setAttribute("aria-label", "Drill " + (i+1) + " length in " + st.len.u);
+    len.setAttribute("aria-valuenow", st.len.n);
+    // The unit lives on the toggle beside it, which both shows and changes it.
+    len.innerHTML = "<b>" + st.len.n + "</b>";
+    scrubEl(len, {
+      get: () => st.len.n,
+      set: v => { st.len.n = v;
+                  len.querySelector("b").textContent = v;
+                  len.setAttribute("aria-valuenow", v);
+                  sub.textContent = dur(); },
+      min: secs ? 5 : 1, max: secs ? 1800 : 64, step: secs ? 5 : 1, px: 3,
+      commit: () => { saveSet(t); renderSetModal(); }
+    });
+
+    const ctl = document.createElement("div");
+    ctl.className = "sctl";
+    ctl.appendChild(len);
+    /* Shows the unit and changes it, the way the phrase-length chip on the
+       drill page shows its count and cycles it. An icon would have to be
+       decoded; the word cannot be, and at four characters it is narrower than
+       any icon that could have replaced it. */
+    ctl.appendChild(mini(st.len.u, "Measured in " + st.len.u + ", tap to change", () => {
+      st.len.u = secs ? "bars" : "sec";
+      st.len.n = secs ? 8 : 60;      // a sane default in the unit you switched to
+      saveSet(t); renderSetModal();
+    }, "unit"));
+    ctl.appendChild(mini("↑", "Move drill up", () => {
+      if (i > 0){ const p = t.drills[i-1]; t.drills[i-1] = t.drills[i]; t.drills[i] = p;
+                  saveSet(t); renderSetModal(); }
+    }));
+    ctl.appendChild(mini("↓", "Move drill down", () => {
+      if (i < t.drills.length-1){ const p = t.drills[i+1]; t.drills[i+1] = t.drills[i]; t.drills[i] = p;
+                                 saveSet(t); renderSetModal(); }
+    }));
+    ctl.appendChild(mini("×", "Remove drill", () => {
+      t.drills.splice(i,1); saveSet(t); renderSetModal();
+    }, "warn"));
+
+    row.appendChild(n); row.appendChild(info); row.appendChild(ctl);
+    host.appendChild(row);
+  });
+}
+
+function renderSetModal(){
+  const list = Store.sets();
+
+  /* Destination is chosen at the moment of adding, not held as a mode you have
+     to remember you are in. */
+  $("setsNow").textContent = drillLabel(snapshotDrill());
+  const ap = $("setsAddPick"); ap.innerHTML = "";
+  for (const t of list){
+    const b = chip("sm", false);
+    b.innerHTML = t.name + '<span class="ct">' + t.drills.length + '</span>';
+    b.setAttribute("aria-label", "Add this drill to " + t.name);
+    b.onclick = () => addToSet(t);
+    ap.appendChild(b);
   }
-  t.steps.push(snapshotStep());
-  Store.putTemplate(t);
-  renderTemplates();
-  flash("Added to " + t.name + " · " + t.steps.length +
-        " step" + (t.steps.length===1 ? "" : "s"));
+  const nb = chip("sm", false);
+  nb.textContent = "+ new";
+  nb.onclick = () => { const t = newSet(); if (t) addToSet(t); };
+  ap.appendChild(nb);
+
+  const host = $("setsList"); host.innerHTML = "";
+  $("setsEmpty").hidden = list.length > 0;
+
+  for (const t of list){
+    const box = document.createElement("div");
+    box.className = "tpl";
+
+    const head = document.createElement("div");
+    head.className = "sethead";
+    // Run is on the set itself: any of them can be started without first
+    // being chosen somewhere else.
+    head.appendChild(mini("▶", "Run " + t.name, () => playSet(t), "go"));
+    const nm = document.createElement("b"); nm.textContent = t.name;
+    const meta = document.createElement("span");
+    meta.className = "hint";
+    meta.textContent = t.drills.length
+      ? t.drills.length + " drill" + (t.drills.length===1?"":"s") + " · " + mmss(Store.setSeconds(t))
+      : "empty";
+    const grow = document.createElement("span"); grow.className = "grow";
+    const open = openSetId === t.id;
+    head.appendChild(nm); head.appendChild(meta); head.appendChild(grow);
+    head.appendChild(mini(open ? "▴" : "▾", open ? "Collapse" : "Edit steps", () => {
+      openSetId = open ? null : t.id; renderSetModal();
+    }));
+    box.appendChild(head);
+
+    if (open){
+      const steps = document.createElement("div");
+      steps.className = "setdrills";
+      renderSteps(t, steps);
+      box.appendChild(steps);
+
+      const row = document.createElement("div");
+      row.className = "pick"; row.style.paddingTop = "8px";
+      row.appendChild(mini("rename", null, () => {
+        const name = prompt("Rename set", t.name);
+        if (!name || !name.trim()) return;
+        t.name = name.trim().slice(0,40); saveSet(t); renderSetModal();
+      }));
+      row.appendChild(mini("delete", null, () => {
+        if (!confirm('Delete "' + t.name + '" and its ' + t.drills.length + ' steps?')) return;
+        Store.dropSet(t.id);
+        if (runSet && runSet.id === t.id){ runSet = null; runIdx = -1; renderRun(); }
+        openSetId = null; renderSetModal();
+      }, "warn"));
+      box.appendChild(row);
+    }
+    host.appendChild(box);
+  }
+}
+
+function showSets(open){
+  const m = $("setsModal");
+  if (open){
+    setSettings(false);
+    const r = document.querySelector(".transport").getBoundingClientRect();
+    m.style.top = Math.round(r.bottom + 8) + "px";
+    m.style.maxHeight = "calc(100vh - " + Math.round(r.bottom + 22) + "px)";
+    renderSetModal();
+  }
+  m.hidden = !open;
+  $("scrim").hidden = !open && $("settings").hidden;
+  $("setsBtn").classList.toggle("live", open);
+  $("setsBtn").setAttribute("aria-expanded", String(open));
+}
+
+$("setsBtn").onclick = () => showSets($("setsModal").hidden);
+
+/* ------------------------------------------------------------------ backup */
+function download(name, text, type){
+  const url = URL.createObjectURL(new Blob([text], {type}));
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+$("expBtn").onclick = () => {
+  const d = new Date(), p = n => String(n).padStart(2,"0");
+  download("millitap-backup-" + d.getFullYear() + p(d.getMonth()+1) + p(d.getDate()) + ".json",
+    JSON.stringify(Store.exportAll()), "application/json");
 };
 
-/* The templates page owns which template is open; a full navigation is the only
-   thing between the two pages, so reading it at load is enough. */
-tplSel = Store.templates().find(t => t.id === Store.activeTemplate()) || null;
+$("impBtn").onclick = () => $("impFile").click();
+
+$("impFile").onchange = e => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  const r = new FileReader();
+  r.onerror = () => alert("Could not read that file.");
+  r.onload = () => {
+    let parsed;
+    try { parsed = JSON.parse(r.result); } catch (err) { parsed = null; }
+    const res = parsed && Store.importAll(parsed);
+    if (!res) return alert("That file is not a millitap backup.");
+    if (!res.ok) return alert("Import failed — storage may be full.");
+    alert("Imported " + res.sessions + " session" + (res.sessions===1?"":"s") +
+      " and " + res.sets + " set" + (res.sets===1?"":"s") +
+      (res.replaced ? ", replacing " + res.replaced : "") +
+      (res.skipped ? ". Skipped " + res.skipped + " already present." : "."));
+    renderSetModal();
+  };
+  r.readAsText(file);
+};
 
 $("tRamp").onclick = () => {
   cfg.ramp.on = !cfg.ramp.on;
@@ -1468,7 +1754,6 @@ $("advToggle").onclick = () => {
 $("off").oninput = e=>{ cfg.offset=+e.target.value; $("offv").textContent=cfg.offset+" ms"; };
 
 $("run").onclick = toggle;
-$("clear").onclick = clearAll;
 
 /* A plain div rather than <details>, because the gear lives up in the transport
    row and a <summary> would have to sit inside the panel it opens.
@@ -1488,8 +1773,8 @@ function setSettings(open){
   $("gear").setAttribute("aria-expanded", String(open));
 }
 
-$("gear").onclick  = () => setSettings($("settings").hidden);
-$("scrim").onclick = () => setSettings(false);
+$("gear").onclick  = () => { showSets(false); setSettings($("settings").hidden); };
+$("scrim").onclick = () => { setSettings(false); showSets(false); };
 
 /* Deliberately stall the main thread, to test whether touch timestamps
    survive it. Interval is prime-ish so it never locks to the beat. */
@@ -1503,7 +1788,7 @@ $("stress").onchange = e => {
   } else { jank = 0; }
 };
 
-renderPickers(); renderGrid(); renderBars(); renderTempo(); renderTemplates();
+renderPickers(); renderGrid(); renderBars(); renderTempo(); renderRun();
 buildPads(); resize(); stats();
 
 /* ============================== install ============================== */

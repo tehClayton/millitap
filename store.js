@@ -34,58 +34,69 @@ const Store = (() => {
     }
   }
 
-  /* Templates are a different kind of thing from sessions — authored, edited and
+  /* Sets are a different kind of thing from sessions — authored, edited and
      deleted, rather than appended and never touched — so they get their own key
      and their own accessors rather than sharing a shape they do not fit. */
-  const TKEY = "millitap.templates.v1";
-  const AKEY = "millitap.activeTemplate.v1";
+  const SKEY = "millitap.sets.v1";
+  /* Written when these were called templates and their drills were called steps.
+     Migrated on first read rather than left to rot, so the stored shape and the
+     words on screen cannot drift apart again. */
+  const LEGACY_KEY = "millitap.templates.v1";
 
-  function readT(){
+  function normSet(t){
+    if (t && !Array.isArray(t.drills) && Array.isArray(t.steps)){
+      const out = Object.assign({}, t, { drills: t.steps });
+      delete out.steps;
+      return out;
+    }
+    return t;
+  }
+
+  function readS(){
     try {
-      const raw = localStorage.getItem(TKEY);
+      let raw = localStorage.getItem(SKEY), migrating = false;
+      if (raw == null){
+        raw = localStorage.getItem(LEGACY_KEY);
+        migrating = raw != null;
+      }
       const a = raw ? JSON.parse(raw) : [];
-      return Array.isArray(a) ? a : [];
+      if (!Array.isArray(a)) return [];
+      const out = a.map(normSet);
+      if (migrating){
+        writeS(out);
+        try { localStorage.removeItem(LEGACY_KEY); } catch (e) {}
+      }
+      return out;
     } catch (e) { return []; }
   }
-  function writeT(a){
-    try { localStorage.setItem(TKEY, JSON.stringify(a)); return true; }
+  function writeS(a){
+    try { localStorage.setItem(SKEY, JSON.stringify(a)); return true; }
     catch (e) { return false; }
   }
 
   return {
     all: read,
 
-    templates: readT,
+    sets: readS,
 
-    /* Upsert by id, so editing a template in place and creating one are the
-       same call and a half-edited template can never fork into two. */
-    putTemplate(t){
-      const a = readT();
+    /* Upsert by id, so editing a set in place and creating one are the same
+       call and a half-edited set can never fork into two. */
+    putSet(t){
+      const a = readS();
       const i = a.findIndex(x => x.id === t.id);
       if (i < 0) a.push(t); else a[i] = t;
-      return writeT(a);
+      return writeS(a);
     },
 
-    dropTemplate(id){
-      return writeT(readT().filter(t => t.id !== id));
+    dropSet(id){
+      return writeS(readS().filter(t => t.id !== id));
     },
 
-    /* Which template the drill page is appending to. Kept in storage rather than
-       passed in a URL, because the two pages are separate documents and a full
-       navigation is the only thing that happens between them. */
-    activeTemplate(){
-      try { return localStorage.getItem(AKEY); } catch (e) { return null; }
-    },
-    setActiveTemplate(id){
-      try { id ? localStorage.setItem(AKEY, id) : localStorage.removeItem(AKEY); }
-      catch (e) {}
-    },
-
-    /* How long a step will actually take. Steps measured in bars need the tempo
-       map to answer that, and a ramping step needs the same closed form the
-       scheduler uses — an estimate that disagreed with what plays would be worse
-       than no estimate at all. */
-    stepSeconds(st){
+    /* How long a drill will actually take. Drills measured in bars need the
+       tempo map to answer that, and a ramping drill needs the same closed form
+       the scheduler uses — an estimate that disagreed with what plays would be
+       worse than no estimate at all. */
+    drillSeconds(st){
       if (!st || !st.len) return 0;
       if (st.len.u === "sec") return st.len.n;
       const beats = st.len.n * (st.beats || 4);
@@ -97,42 +108,44 @@ const Store = (() => {
       return (-st.bpm + Math.sqrt(st.bpm*st.bpm + 240*k*beats)) / (2*k);
     },
 
-    templateSeconds(t){
-      return (t && t.steps || []).reduce((a, st) => a + Store.stepSeconds(st), 0);
+    setSeconds(t){
+      return (t && t.drills || []).reduce((a, d) => a + Store.drillSeconds(d), 0);
     },
 
     /* One backup file carries everything, because "back up millitap" is the
        thing a person wants, not "back up two of its three kinds of data". */
     exportAll(){
-      return { app:"millitap", schema:2, exported:new Date().toISOString(),
-               sessions:read(), templates:readT() };
+      return { app:"millitap", schema:3, exported:new Date().toISOString(),
+               sessions:read(), sets:readS() };
     },
 
     importAll(parsed){
       // A bare array is a schema-1 session export; accept it rather than refuse.
       const rows = Array.isArray(parsed) ? parsed
                  : (parsed && Array.isArray(parsed.sessions) ? parsed.sessions : null);
-      const tpls = parsed && Array.isArray(parsed.templates) ? parsed.templates : [];
+      // schema 3 calls them sets; anything earlier called them templates.
+      const raw = parsed && (Array.isArray(parsed.sets) ? parsed.sets
+                : Array.isArray(parsed.templates) ? parsed.templates : []);
+      const tpls = (raw || []).map(normSet);
       if (!rows && !tpls.length) return null;
 
       const res = rows ? Store.addMany(rows) : { added:0, skipped:0, ok:true };
 
-      /* Templates merge by id: incoming replaces a template of the same id
-         rather than being skipped, so a backup taken after an edit actually
-         carries the edit. Both counts are reported so it is never a silent
-         overwrite. */
+      /* Sets merge by id: incoming replaces a set of the same id rather than
+         being skipped, so a backup taken after an edit actually carries the
+         edit. Both counts are reported so it is never a silent overwrite. */
       let tAdded = 0, tReplaced = 0;
       if (tpls.length){
-        const have = readT();
+        const have = readS();
         for (const t of tpls){
-          if (!t || !t.id || !Array.isArray(t.steps)) continue;
+          if (!t || !t.id || !Array.isArray(t.drills)) continue;
           const i = have.findIndex(x => x.id === t.id);
           if (i < 0){ have.push(t); tAdded++; } else { have[i] = t; tReplaced++; }
         }
-        writeT(have);
+        writeS(have);
       }
       return { sessions:res.added, skipped:res.skipped,
-               templates:tAdded, replaced:tReplaced, ok:res.ok };
+               sets:tAdded, replaced:tReplaced, ok:res.ok };
     },
 
     add(rec){
