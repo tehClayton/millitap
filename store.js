@@ -38,7 +38,6 @@ const Store = (() => {
      deleted, rather than appended and never touched — so they get their own key
      and their own accessors rather than sharing a shape they do not fit. */
   const TKEY = "millitap.templates.v1";
-  const AKEY = "millitap.activeTemplate.v1";
 
   function readT(){
     try {
@@ -68,17 +67,6 @@ const Store = (() => {
 
     dropTemplate(id){
       return writeT(readT().filter(t => t.id !== id));
-    },
-
-    /* Which template the drill page is appending to. Kept in storage rather than
-       passed in a URL, because the two pages are separate documents and a full
-       navigation is the only thing that happens between them. */
-    activeTemplate(){
-      try { return localStorage.getItem(AKEY); } catch (e) { return null; }
-    },
-    setActiveTemplate(id){
-      try { id ? localStorage.setItem(AKEY, id) : localStorage.removeItem(AKEY); }
-      catch (e) {}
     },
 
     /* How long a step will actually take. Steps measured in bars need the tempo
