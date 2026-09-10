@@ -252,8 +252,9 @@
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .sinfo i{font-style:normal;font-family:var(--fig);font-size:9px;color:var(--ink-mute)}
   .sctl{display:flex;align-items:center;gap:3px;flex:0 0 auto}
-  .slen{min-width:46px;padding:4px 6px;gap:2px}
-  .slen b{font-size:14px}
+  .slen{min-width:44px;padding:6px 6px;gap:0}
+  .slen b{font-size:15px}
+  .mini.unit{font-family:var(--fig);color:var(--ink);min-width:40px}
   .mini{padding:6px 8px;font-size:11px;min-width:28px;line-height:1;
     border-radius:var(--r1);color:var(--ink-dim);font-family:inherit;
     background:linear-gradient(var(--raise-a),var(--raise-b));
@@ -1570,9 +1571,10 @@ function renderSteps(t, host){
     const len = document.createElement("button");
     len.type = "button"; len.className = "tval slen";
     len.setAttribute("role", "spinbutton");
-    len.setAttribute("aria-label", "Drill " + (i+1) + " length");
+    len.setAttribute("aria-label", "Drill " + (i+1) + " length in " + st.len.u);
     len.setAttribute("aria-valuenow", st.len.n);
-    len.innerHTML = "<b>" + st.len.n + "</b><i>" + st.len.u + "</i>";
+    // The unit lives on the toggle beside it, which both shows and changes it.
+    len.innerHTML = "<b>" + st.len.n + "</b>";
     scrubEl(len, {
       get: () => st.len.n,
       set: v => { st.len.n = v;
@@ -1586,11 +1588,15 @@ function renderSteps(t, host){
     const ctl = document.createElement("div");
     ctl.className = "sctl";
     ctl.appendChild(len);
-    ctl.appendChild(mini("⇄", secs ? "Measure in bars" : "Measure in seconds", () => {
+    /* Shows the unit and changes it, the way the phrase-length chip on the
+       drill page shows its count and cycles it. An icon would have to be
+       decoded; the word cannot be, and at four characters it is narrower than
+       any icon that could have replaced it. */
+    ctl.appendChild(mini(st.len.u, "Measured in " + st.len.u + ", tap to change", () => {
       st.len.u = secs ? "bars" : "sec";
       st.len.n = secs ? 8 : 60;      // a sane default in the unit you switched to
       saveSet(t); renderSetModal();
-    }));
+    }, "unit"));
     ctl.appendChild(mini("↑", "Move drill up", () => {
       if (i > 0){ const p = t.drills[i-1]; t.drills[i-1] = t.drills[i]; t.drills[i] = p;
                   saveSet(t); renderSetModal(); }
