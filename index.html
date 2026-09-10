@@ -117,6 +117,20 @@
   .tval i{font-style:normal;font-size:8px;letter-spacing:.12em;text-transform:uppercase;
     color:var(--ink-mute);line-height:1}
   .tval.drag{background:var(--panel-hi);border-color:var(--true)}
+  /* Every scrubbable field takes pointer input past its painted box, so a thumb
+     can start the drag from above or below instead of landing on the value it is
+     about to change. A pseudo-element does it: nothing is drawn and no layout
+     moves, the target simply reaches further than the paint.
+
+     How far it may reach is set by whatever sits next to it, so it is a variable
+     rather than a constant. In the transport there are 8px row gaps to spend. In
+     a set's drill list the next field is only 12px below, and two 12px reaches
+     would overlap in the middle — you would aim at one row's length and get its
+     neighbour's — so there it halves. */
+  .tval, .tramp{position:relative; --reach:5px}
+  .tempo .tval, .tempo .tramp{--reach:12px}
+  .tval::before, .tramp::before{content:"";position:absolute;left:0;right:0;
+    top:calc(0px - var(--reach));bottom:calc(0px - var(--reach))}
   .tval.drag i{color:var(--ink-dim)}
   .tval:focus-visible{outline:2px solid var(--true);outline-offset:2px}
   /* The live readout is output, not input: no raised face, nothing to grab. */
