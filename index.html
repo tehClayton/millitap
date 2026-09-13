@@ -807,16 +807,16 @@ function resetLanes(){
 /* Beats on, downbeat accented, subdivisions off — what "quarter notes only"
    used to mean, now just one reachable state of the grid among many.
 
-   A polyrhythm opens with the pulse sounding and the cross-rhythm silent. You
-   need a reference to place the x against, and hearing the stream you are
-   trying to play is the opposite of the exercise — but it is one tap away for
-   anyone learning the shape before drilling it. */
+   Both polyrhythm rows open the same way: every note sounding, the downbeat
+   accented. Hearing the figure you are about to play is how you find it, and
+   the two rows are identical settings on two streams rather than a reference
+   and an exception — so the row you silence to make the drill harder is a
+   choice you make, not one already made for you. */
+const clickRow = n => Array.from({length:n}, (_,j) => j ? 1 : 2);
+
 function defaultClick(){
   if (cfg.poly){
-    cfg.polyClick = [
-      Array.from({length:cfg.poly.x}, () => 0),
-      Array.from({length:cfg.poly.y}, (_,j) => j ? 1 : 2)
-    ];
+    cfg.polyClick = [clickRow(cfg.poly.x), clickRow(cfg.poly.y)];
     return;
   }
   const sub=gridSub(), n=cfg.pattern.beats*sub;
