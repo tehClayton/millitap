@@ -119,6 +119,12 @@
   .ring{stroke:var(--panel);stroke-width:2}
   .m-rush{fill:var(--rush)} .m-drag{fill:var(--drag)}
   .m-true{fill:var(--true)} .m-dim{fill:var(--ink-dim)}
+  /* The pulse side of a polyrhythm, drawn hollow. The stroke takes the mark's
+     own colour, so the rush/drag reading survives the shape change; .ring's
+     surface-coloured stroke would erase it, hence the explicit override. */
+  .ln{fill:var(--panel)}
+  .ln.m-rush{stroke:var(--rush)} .ln.m-drag{stroke:var(--drag)}
+  .ln.m-true{stroke:var(--true)} .ln.m-dim{stroke:var(--ink-dim)}
   .w-rush{stroke:var(--rush)} .w-drag{stroke:var(--drag)} .w-true{stroke:var(--true)}
   .whisk{stroke-width:4;stroke-opacity:.34;stroke-linecap:round}
   .missx{stroke:var(--miss);stroke-width:2;stroke-linecap:round}
@@ -407,6 +413,13 @@ function chartPositions(rows){
   /* Sessions recorded before pad matching was configurable were all pad-assigned,
      so a missing field means the old alternating behaviour, not the new default. */
   const assigned = (last.padMode || "alt") === "alt" && pads > 1;
+  /* A polyrhythm's onsets belong to two streams, and this chart is where that
+     pays off: a stream that lags shows up as every other mark sitting off the
+     line. It only reads that way if each mark says which stream it is, so the
+     lane recorded with the session is what names them. */
+  const lane = Array.isArray(last.lane) && last.lane.length === len ? last.lane : null;
+  const ratio = /^poly:(\d+):(\d+)/.exec(last.key || "");
+  const sideName = L => ratio ? "the " + ratio[L ? 2 : 1] : (L ? "pulse" : "cross");
   const f = frame(host, 200, {l:40,r:14,t:12,b:26});
   const span = Math.max(30,
     Math.max(...stats.map(s => s.n ? Math.abs(s.mean)+s.sd : 0))*1.15);
@@ -421,7 +434,8 @@ function chartPositions(rows){
   const name = i => {
     const beat = Math.floor(pos[i]) + 1, sub = pos[i] % 1;
     return (sub ? "beat "+beat+" + "+sub.toFixed(2).replace(/0+$/,"") : "beat "+beat)
-         + (assigned ? " · pad "+(i % pads + 1) : "");
+         + (lane ? " · " + sideName(lane[i])
+                 : assigned ? " · pad "+(i % pads + 1) : "");
   };
 
   let empty = 0;
@@ -448,7 +462,10 @@ function chartPositions(rows){
     const tone = devTone(s.mean);
     f.svg.appendChild(el("line",{x1:x,y1:Y(s.mean-s.sd),x2:x,y2:Y(s.mean+s.sd),
       "class":"whisk w-"+tone}));
-    dot(f, x, Y(s.mean), "m-"+tone,
+    /* Hollow for the pulse, solid for the cross-rhythm — the same pairing the
+       drill page's lanes and the pad faces use, so one glance carries across
+       all three. Colour stays on rush/drag, which is not a free slot. */
+    dot(f, x, Y(s.mean), "m-"+tone + (lane && lane[i] ? " ln" : ""),
       "<b>"+name(i)+"</b><br>"+ms(s.mean)+" ms average<br>"+
       s.sd.toFixed(1)+" ms spread<br>"+s.n+" taps");
   });
