@@ -162,7 +162,7 @@
   #dv{display:block;width:100%;height:60px}
   /* Two stacked lanes need the room; one does not, so the taller well is only
      paid for while a polyrhythm is loaded. */
-  .drift.two #dv{height:92px}
+  .drift.lanes #dv{height:92px}
   .axis,.dlab{position:absolute;font-family:var(--fig);font-size:9px;
     letter-spacing:.07em;text-transform:uppercase;pointer-events:none;opacity:.85}
   .axis{left:var(--sp3)}
@@ -387,9 +387,14 @@
   /* A polyrhythm's two streams get a row each. Same slot and the same total
      height — the strip's height is what everything else on it was fitted to,
      so two rows split the 32px rather than adding a second 32. */
-  .grid.two{flex-direction:column;gap:2px}
+  /* Named "lanes" rather than "two" because .two is already a settings-panel
+     utility a hundred lines up, and its bare `.two>div{display:grid}` outranks
+     .crow — which laid every cell out as a full-width row inside a 15px box,
+     leaving two hairlines where the grid should be. A modifier on .grid has to
+     be a name nothing else in the sheet claims. */
+  .grid.lanes{flex-direction:column;gap:2px}
   .crow{display:flex;gap:2px;align-items:stretch;height:15px}
-  .grid.two .cell{height:auto;border-radius:3px}
+  .grid.lanes .cell{height:auto;border-radius:3px}
   /* The stream's own number in the gutter, matching the pad faces and the
      drift lanes so one glance carries across all three. */
   .rlab{flex:0 0 13px;font-family:var(--fig);font-size:9px;line-height:15px;
@@ -397,7 +402,7 @@
   /* 15px rows are under the thumb, so the cross-rhythm's cells reach upward and
      the pulse's downward — 9px of extra target each, taken from the strip's own
      padding rather than from each other. */
-  .grid.two .cell::before{content:"";position:absolute;left:0;right:0}
+  .grid.lanes .cell::before{content:"";position:absolute;left:0;right:0}
   .crow:first-child .cell::before{top:-9px;bottom:0}
   .crow:last-child  .cell::before{top:0;bottom:-9px}
 
@@ -1288,7 +1293,7 @@ function buildPads(){
      is sized in device pixels from the laid-out box — so it has to be measured
      again after the class lands, not before. */
   const well = document.querySelector(".drift");
-  if (well){ well.classList.toggle("two", !!cfg.poly); resize(); }
+  if (well){ well.classList.toggle("lanes", !!cfg.poly); resize(); }
 }
 
 addEventListener("keydown", e => {
@@ -1618,7 +1623,7 @@ const CELL_NAMES = ["off","on","accent"];
 function renderPolyGrid(){
   const host=$("clickGrid"); host.innerHTML="";
   gridEls=[]; litCells=[];
-  host.classList.add("two");
+  host.classList.add("lanes");
   for (const L of [0,1]){
     const row=document.createElement("div");
     row.className="crow";
@@ -1646,7 +1651,7 @@ function renderPolyGrid(){
 function renderGrid(){
   if (cfg.poly) return renderPolyGrid();
   const host=$("clickGrid"); host.innerHTML="";
-  host.classList.remove("two");
+  host.classList.remove("lanes");
   const sub=gridSub(), names=CELL_NAMES;
   gridEls=[]; litCells=[];
   cfg.click.forEach((state,i) => {
