@@ -384,6 +384,23 @@
      fell across several frames, and that moment is the whole subject. */
   .cell.now{box-shadow:0 0 0 2px var(--ink),0 0 18px -3px rgba(234,240,246,.4)}
 
+  /* A polyrhythm's two streams get a row each. Same slot and the same total
+     height — the strip's height is what everything else on it was fitted to,
+     so two rows split the 32px rather than adding a second 32. */
+  .grid.two{flex-direction:column;gap:2px}
+  .crow{display:flex;gap:2px;align-items:stretch;height:15px}
+  .grid.two .cell{height:auto;border-radius:3px}
+  /* The stream's own number in the gutter, matching the pad faces and the
+     drift lanes so one glance carries across all three. */
+  .rlab{flex:0 0 13px;font-family:var(--fig);font-size:9px;line-height:15px;
+    color:var(--ink-mute);text-align:right;padding-right:3px}
+  /* 15px rows are under the thumb, so the cross-rhythm's cells reach upward and
+     the pulse's downward — 9px of extra target each, taken from the strip's own
+     padding rather than from each other. */
+  .grid.two .cell::before{content:"";position:absolute;left:0;right:0}
+  .crow:first-child .cell::before{top:-9px;bottom:0}
+  .crow:last-child  .cell::before{top:0;bottom:-9px}
+
   label{display:grid;gap:6px;font-size:12px;color:var(--ink-dim)}
   .check{display:flex;align-items:center;gap:var(--sp3);font-size:12px;color:var(--ink-dim)}
   .check input{width:19px;height:19px;accent-color:var(--miss);flex:0 0 auto}
@@ -661,24 +678,29 @@ const FEELS = [
    hand those taps to the cross-rhythm's onsets as well, and the drill would
    report that you had played a polyrhythm you never played.
 
-   Which ratios are offered is capped by the click grid, not by the audio: the
-   grid needs x/gcd(x,y) cells per beat for both layers to land on cells, so 7:4
-   would want 28 of them in a 360px slot — under 11px each, too small to tap. */
+   Each stream gets its own click row, so the grid holds x cells and y cells
+   rather than the x/gcd(x,y) per beat a shared grid would need to land both on
+   cells. 7:4 is eleven cells across two rows instead of twenty-eight in one,
+   which is why it can be offered at all. */
 const POLYS = [
-  {x:3, y:2}, {x:3, y:4}, {x:4, y:3}, {x:5, y:2}, {x:5, y:3}, {x:5, y:4},
+  {x:3, y:2}, {x:3, y:4}, {x:4, y:3}, {x:5, y:2},
+  {x:5, y:3}, {x:5, y:4}, {x:7, y:4},
 ];
-const gcd = (a,b) => b ? gcd(b, a%b) : a;
-const polyId  = p => p.x + ":" + p.y;
-const polySub = p => p.x / gcd(p.x, p.y);
+const polyId = p => p.x + ":" + p.y;
+const laneLen = L => cfg.poly ? (L ? cfg.poly.y : cfg.poly.x) : 0;
 
 /* Lane 0 is the cross-rhythm (the x), lane 1 the pulse (the y) — bpm sets the
    pulse, keeping the rule that tempo always names the beat unit. Both lanes
    open on the downbeat, and that coincidence is deliberately TWO onsets rather
-   than one: it is played with two limbs, so it is two things to get right. */
+   than one: it is played with two limbs, so it is two things to get right.
+
+   li is the onset's index within its own lane, which is what addresses its
+   click cell — the merged list's index would renumber the whole of one row
+   every time the other row's spacing changed. */
 function polyOnsets(p){
   const on = [];
-  for (let i=0;i<p.x;i++) on.push({p: i*p.y/p.x, lane:0});
-  for (let j=0;j<p.y;j++) on.push({p: j,         lane:1});
+  for (let i=0;i<p.x;i++) on.push({p: i*p.y/p.x, lane:0, li:i});
+  for (let j=0;j<p.y;j++) on.push({p: j,         lane:1, li:j});
   return on.sort((a,b) => a.p - b.p || a.lane - b.lane);
 }
 
@@ -696,7 +718,7 @@ let padEls=[], schedTimer=null, stressTimer=null;
    pads can serve one stream: the 3 played with alternating hands is still the 3. */
 const cfg = { bpm:84, meter:METERS[0], note:NOTES[0], feel:null, poly:null,
               pattern:null, click:[], pads:2, padMode:"any", countIn:1, offset:0,
-              padLanes:[0,1],
+              padLanes:[0,1], polyClick:[[],[]],
               phrase:4, bars:[1,1,1,1], ramp:{on:false, to:120, secs:30} };
 const muted = () => cfg.bars.some(x => !x);
 const LOOKAHEAD=0.18, TICK=25, HISTORY=10;
@@ -746,10 +768,10 @@ function bpmAt(t){
 }
 
 /* One grid cell per subdivision of the current pattern. A feel's onsets are
-   uneven, so it gets a plain eighth-note grid for its clicks to sit on; a
-   polyrhythm needs the grid both layers can sit on, which is the x side of the
-   ratio once the common factor is taken out. */
-const gridSub = () => cfg.poly ? polySub(cfg.poly) : cfg.feel ? 2 : cfg.note.sub;
+   uneven, so it gets a plain eighth-note grid for its clicks to sit on.
+   A polyrhythm does not use this at all: its rows are addressed per lane, so
+   every caller that can run under one branches before reaching here. */
+const gridSub = () => cfg.feel ? 2 : cfg.note.sub;
 
 /* A polyrhythm overrides meter, note value and feel alike — it brings its own
    bar length and its own subdivision, so none of the three has anything left
@@ -778,8 +800,20 @@ function resetLanes(){
 }
 
 /* Beats on, downbeat accented, subdivisions off — what "quarter notes only"
-   used to mean, now just one reachable state of the grid among many. */
+   used to mean, now just one reachable state of the grid among many.
+
+   A polyrhythm opens with the pulse sounding and the cross-rhythm silent. You
+   need a reference to place the x against, and hearing the stream you are
+   trying to play is the opposite of the exercise — but it is one tap away for
+   anyone learning the shape before drilling it. */
 function defaultClick(){
+  if (cfg.poly){
+    cfg.polyClick = [
+      Array.from({length:cfg.poly.x}, () => 0),
+      Array.from({length:cfg.poly.y}, (_,j) => j ? 1 : 2)
+    ];
+    return;
+  }
   const sub=gridSub(), n=cfg.pattern.beats*sub;
   cfg.click = Array.from({length:n}, (_,i) => i%sub ? 0 : (i ? 1 : 2));
 }
@@ -825,14 +859,24 @@ function toCtx(perfMs){
 }
 
 /* ============================== audio ============================== */
-function click(at, accent){
+/* The cross-rhythm gets a voice of its own rather than a transposition of the
+   pulse. Two streams you are trying to hold apart must not sound like one
+   stream with an odd accent pattern — so it is a different waveform in a
+   different register, sitting under the pulse instead of competing for its
+   band. Lane is undefined everywhere outside a polyrhythm, which lands on the
+   pulse voice: the click nobody asked to change does not change. */
+function click(at, accent, lane){
   const o=ctx.createOscillator(), g=ctx.createGain();
-  o.frequency.value = accent ? 1100 : 780;
+  const cross = lane === 0;
+  if (cross) o.type = "triangle";
+  o.frequency.value = cross ? (accent ? 622 : 466) : (accent ? 1100 : 780);
+  const peak = cross ? (accent ? 0.44 : 0.3) : (accent ? 0.5 : 0.32);
+  const dur  = cross ? 0.06 : 0.045;
   g.gain.setValueAtTime(0.0001, at);
-  g.gain.exponentialRampToValueAtTime(accent?0.5:0.32, at+0.001);
-  g.gain.exponentialRampToValueAtTime(0.0001, at+0.045);
+  g.gain.exponentialRampToValueAtTime(peak, at+0.001);
+  g.gain.exponentialRampToValueAtTime(0.0001, at+dur);
   o.connect(g).connect(ctx.destination);
-  o.start(at); o.stop(at+0.06);
+  o.start(at); o.stop(at+dur+0.015);
 }
 
 function schedule(){
@@ -855,6 +899,40 @@ function schedule(){
     targets.push({t, k, voice:v, lane: cfg.poly ? o.lane : null,
                   claimed:false, done:false});
     nextOnset++;
+  }
+
+  /* A polyrhythm's clicks are addressed per stream, so its pass walks the
+     onsets rather than a uniform grid — every position either row can sound at
+     is an onset, and the two rows are exactly the two lanes. nextCell counts
+     onsets here instead of cells, which is the same counter doing the same job
+     against a different ruler. */
+  if (cfg.poly){
+    /* Normalised, because the count-in runs this negative and on[-1] is not a
+       thing. Math.floor carries the bar in the same direction. */
+    const cellBeat = n => {
+      const i = ((n % len) + len) % len;
+      return Math.floor(n/len)*bars + on[i].p + (on[i].o||0);
+    };
+    while (startTime + timeAt(cellBeat(nextCell)) < horizon){
+      const t = startTime + timeAt(cellBeat(nextCell));
+      const o = on[((nextCell % len) + len) % len];
+      const bar = Math.floor(nextCell / len);
+      if (nextCell < 0){
+        /* The count-in is the pulse alone, whatever the rows say. Counting a
+           polyrhythm in with both streams tells you nothing about where the bar
+           begins — and the rows are mutable, so a silenced pulse row would
+           otherwise leave the count-in silent too. */
+        if (o.lane === 1) click(t, o.p === 0, 1);
+      } else {
+        const P = cfg.bars.length;
+        const st = (cfg.polyClick[o.lane] || [])[o.li] || 0;
+        if (cfg.bars[((bar % P) + P) % P] && st) click(t, st===2, o.lane);
+      }
+      nextCell++;
+    }
+    const cut = ctx.currentTime - HISTORY - 1;
+    if (targets.length > 400) targets = targets.filter(x => x.t > cut);
+    return;
   }
 
   /* One pass per grid cell rather than per beat, so an accent can land on any
@@ -1241,7 +1319,10 @@ function start(){
   const lead=0.25, inBeats=cfg.countIn*cfg.pattern.beats;
   clickFrom = ctx.currentTime + lead;
   startTime = clickFrom + inBeats*beatDur();
-  if (inBeats) nextCell = -inBeats*gridSub();
+  /* nextCell counts whatever the click pass walks — grid cells normally, onsets
+     under a polyrhythm — so the count-in is measured in the same unit. */
+  if (inBeats) nextCell = cfg.poly ? -cfg.countIn*cfg.pattern.on.length
+                                   : -inBeats*gridSub();
 
   running=true;
   $("run").classList.add("on"); $("run").setAttribute("aria-label","Stop");
@@ -1519,12 +1600,55 @@ function liveTempo(){
 
 /* The playhead is a class swap on one cell rather than a redraw, so the grid can
    be rebuilt whenever it likes without knowing anything about timing. */
-let gridEls=[], lastCell=-1;
+let gridEls=[];
+/* Which cells are lit, as indices into gridEls. One normally; two under a
+   polyrhythm, since each stream has its own current note and the two coincide
+   only on the downbeat. */
+let litCells=[];
+
+const CELL_NAMES = ["off","on","accent"];
+
+/* Two rows under a polyrhythm, one per stream, each holding only its own
+   onsets. That is what lets 7:4 exist: eleven cells over two rows instead of
+   twenty-eight crammed into one, and each row's cells stay the width of the
+   slot divided by its own count rather than by the pair's common multiple.
+
+   gridEls stays flat, cross-rhythm row first, so the playhead can address a
+   cell by lane offset without a second structure to keep in step. */
+function renderPolyGrid(){
+  const host=$("clickGrid"); host.innerHTML="";
+  gridEls=[]; litCells=[];
+  host.classList.add("two");
+  for (const L of [0,1]){
+    const row=document.createElement("div");
+    row.className="crow";
+    const tag=document.createElement("span");
+    tag.className="rlab"; tag.textContent=String(laneLen(L));
+    row.appendChild(tag);
+    const cells = cfg.polyClick[L] || [];
+    cells.forEach((state,i) => {
+      const b=document.createElement("button");
+      b.type="button";
+      b.className="cell l"+L+" s"+state+(i?"":" beat");
+      b.setAttribute("aria-label",
+        (L ? "pulse" : "cross-rhythm")+" note "+(i+1)+": "+CELL_NAMES[state]);
+      b.onclick=()=>{
+        cfg.polyClick[L][i]=(cfg.polyClick[L][i]+1)%3;
+        renderGrid();
+      };
+      row.appendChild(b);
+      gridEls.push(b);
+    });
+    host.appendChild(row);
+  }
+}
 
 function renderGrid(){
+  if (cfg.poly) return renderPolyGrid();
   const host=$("clickGrid"); host.innerHTML="";
-  const sub=gridSub(), names=["off","on","accent"];
-  gridEls=[]; lastCell=-1;
+  host.classList.remove("two");
+  const sub=gridSub(), names=CELL_NAMES;
+  gridEls=[]; litCells=[];
   cfg.click.forEach((state,i) => {
     const beat = i%sub===0;
     const b=document.createElement("button");
@@ -1544,24 +1668,36 @@ function renderGrid(){
    ctx.currentTime — otherwise it leads the click you are playing against, which
    on Bluetooth would be by a visible fraction of a beat. */
 function playhead(){
-  let i = -1, bar = -1;
+  let cells = [], bar = -1;
   if (running && ctx && gridEls.length){
-    const sub = gridSub(), cells = cfg.click.length;
-    const n = Math.floor(beatsAt(ctx.currentTime - latency() - startTime) * sub);
-    i = ((n % cells) + cells) % cells;      // count-in runs negative
+    const B = beatsAt(ctx.currentTime - latency() - startTime);
     const P = cfg.bars.length;
-    // The count-in belongs to no bar of the phrase, so it lights none of them.
-    bar = n < 0 ? -1 : ((Math.floor(n/cells) % P) + P) % P;
+    if (cfg.poly){
+      const bars = cfg.pattern.beats;
+      const bb = ((B % bars) + bars) % bars;   // beats into the current bar
+      /* Each row is evenly spaced within the bar, so the current note is a
+         division rather than a search: the cross-rhythm's step is y/x beats
+         and the pulse's is one. */
+      const a = Math.min(cfg.poly.x - 1, Math.floor(bb * cfg.poly.x / bars));
+      const b = Math.min(cfg.poly.y - 1, Math.floor(bb));
+      cells = [a, cfg.poly.x + b];
+      bar = B < 0 ? -1 : ((Math.floor(B/bars) % P) + P) % P;
+    } else {
+      const sub = gridSub(), n = Math.floor(B * sub), len = cfg.click.length;
+      cells = [((n % len) + len) % len];      // count-in runs negative
+      // The count-in belongs to no bar of the phrase, so it lights none of them.
+      bar = n < 0 ? -1 : ((Math.floor(n/len) % P) + P) % P;
+    }
   }
   if (bar !== lastBar){
     if (barEls[lastBar]) barEls[lastBar].classList.remove("now");
     if (barEls[bar]) barEls[bar].classList.add("now");
     lastBar = bar;
   }
-  if (i === lastCell) return;
-  if (gridEls[lastCell]) gridEls[lastCell].classList.remove("now");
-  if (gridEls[i]) gridEls[i].classList.add("now");
-  lastCell = i;
+  if (cells.length === litCells.length && cells.every((c,i) => c === litCells[i])) return;
+  for (const c of litCells) if (gridEls[c]) gridEls[c].classList.remove("now");
+  for (const c of cells)    if (gridEls[c]) gridEls[c].classList.add("now");
+  litCells = cells;
 }
 
 /* Meter and note value both change how many cells the bar has, so the grid is
@@ -1673,6 +1809,7 @@ function snapshotDrill(){
        the same reason meters and feels are stored by id. */
     poly: cfg.poly ? polyId(cfg.poly) : null,
     padLanes: cfg.padLanes.slice(),
+    polyClick: cfg.poly ? cfg.polyClick.map(r => r.slice()) : null,
     beats: cfg.pattern.beats,
     pads: cfg.pads, padMode: cfg.padMode, countIn: cfg.countIn,
     click: cfg.click.slice(), bars: cfg.bars.slice(),
@@ -1700,7 +1837,14 @@ function applyDrill(st){
   buildPattern();
   /* A stored grid only fits the pattern it was captured against. If a set ever
      holds an inconsistent one, rebuild rather than index off the end. */
-  if (st.click && st.click.length === cfg.pattern.beats * gridSub())
+  if (cfg.poly){
+    const pc = st.polyClick;
+    if (pc && pc.length === 2 &&
+        pc[0].length === cfg.poly.x && pc[1].length === cfg.poly.y)
+      cfg.polyClick = pc.map(r => r.slice());
+    else defaultClick();
+  }
+  else if (st.click && st.click.length === cfg.pattern.beats * gridSub())
     cfg.click = st.click.slice();
   else defaultClick();
   cfg.bars = (st.bars && st.bars.length) ? st.bars.slice() : [1];
