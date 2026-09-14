@@ -155,6 +155,50 @@
   .ramp i.t4{background:var(--t4)}
   .none{font-size:12px;color:var(--ink-mute);padding:var(--sp5) 2px}
 
+  /* ---- comparing drills ---- */
+  /* Family is carried by shape, not hue. Four hues on this page already mean
+     rushing, dragging, on the beat and missed; three more that clear those and
+     each other is seven categories on a dark surface, which measured under
+     ΔE 8 between members in every trio tried. Shape survives CVD untouched and
+     leaves colour saying what it says in every other chart here. */
+  .hitm{cursor:pointer}
+  /* Under-practised drills are drawn faint rather than hidden: a drill you
+     have barely played is still worth seeing, just not worth ranking. */
+  .thin{opacity:.42}
+  .shp{width:10px;height:10px;flex:0 0 auto;background:var(--ink-dim)}
+  .shp.circ{border-radius:50%}
+  .shp.sq{border-radius:2px}
+  .shp.tri{background:transparent;width:0;height:0;
+    border-left:5px solid transparent;border-right:5px solid transparent;
+    border-bottom:9px solid var(--ink-dim)}
+
+  .famkind{font-size:10px;font-weight:600;letter-spacing:.11em;
+    text-transform:uppercase;color:var(--ink-mute);
+    margin:var(--sp4) 0 var(--sp2)}
+  .famkind:first-child{margin-top:0}
+  .fam{display:grid;gap:2px;margin-bottom:var(--sp2)}
+  .famrow{display:flex;align-items:baseline;gap:var(--sp3);width:100%;
+    padding:9px 11px;border-radius:var(--r1);text-align:left;cursor:pointer;
+    background:rgba(255,255,255,.022);border:1px solid transparent;
+    color:var(--ink);font-family:var(--ui);font-size:13px;line-height:1.3}
+  .famrow.sel{background:rgba(127,203,143,.12);border-color:var(--true)}
+  .famrow:focus-visible{outline:2px solid var(--true);outline-offset:-2px}
+  .famrow .fname{flex:1;min-width:0}
+  /* Tabular figures and a fixed slot, so the percentages form a column you can
+     read down rather than a ragged edge you have to scan. */
+  .famrow .frel{flex:0 0 4.5ch;text-align:right;font-family:var(--fig);
+    font-variant-numeric:tabular-nums;color:var(--ink)}
+  .famrow .fmeta{flex:0 0 auto;font-family:var(--fig);font-size:10px;
+    color:var(--ink-mute)}
+
+  .back{display:flex;align-items:center;gap:5px;font-size:11px;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--ink-mute);
+    padding:var(--sp2) 2px;background:none;border:none;cursor:pointer;
+    font-family:var(--ui)}
+  .back svg{width:14px;height:14px;fill:currentColor}
+  .back:focus-visible{outline:2px solid var(--true);outline-offset:2px}
+
+
   .legend{display:flex;flex-wrap:wrap;gap:var(--sp3) var(--sp4);padding-top:10px;
     font-size:11px;color:var(--ink-mute)}
   /* Child combinator for the same reason: the tempo key nests a .ramp span,
@@ -236,15 +280,36 @@
   </div>
 
   <div id="content" hidden>
-    <div class="rhead" id="rhead"></div>
-    <div class="pick" id="bucketPick"></div>
-    <div class="exportbar">
-      <button id="pdfBtn">Save as PDF</button>
-      <button id="exportBtn">Export data</button>
-      <button id="importBtn">Import backup</button>
-      <input type="file" id="importFile" accept="application/json,.json" hidden>
+
+    <!-- The page lands here, with nothing selected. Selection used to be
+         required before anything rendered at all, which is what made comparing
+         two drills a matter of remembering the first one while you looked at
+         the second. -->
+    <div id="overview">
+      <section class="card">
+        <h2>Every drill, compared
+          <span class="hint">across is rushing to dragging · up is less steady</span></h2>
+        <div class="chart" id="cx"></div>
+        <div class="legend" id="lx"></div>
+        <p class="note">Spread is shown as a share of the gap between onsets, not
+          in milliseconds. Sixteenths at 160 leave less room to be late in than
+          quarters at 60, so raw milliseconds would rank the slow sparse drills
+          best whatever you played.</p>
+      </section>
+
+      <section class="card">
+        <h2>All drills <span class="hint">worst first · tap one to open it</span></h2>
+        <div id="famList"></div>
+      </section>
     </div>
-    <div class="tiles" id="tiles"></div>
+
+    <div id="detail" hidden>
+      <button class="back" id="backBtn" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7z"/></svg>
+        All drills
+      </button>
+      <div class="rhead" id="rhead"></div>
+      <div class="tiles" id="tiles"></div>
 
     <section class="card">
       <h2>Spread over sessions
@@ -271,10 +336,20 @@
       <div class="chart" id="c4"></div>
     </section>
 
-    <section class="card">
-      <button id="tableToggle" aria-expanded="false">Show data table</button>
-      <div id="tableWrap" hidden></div>
-    </section>
+      <section class="card">
+        <button id="tableToggle" aria-expanded="false">Show data table</button>
+        <div id="tableWrap" hidden></div>
+      </section>
+    </div>
+
+    <!-- Backup and clearing act on everything, so they sit outside both views
+         rather than belonging to whichever drill happens to be open. -->
+    <div class="exportbar">
+      <button id="pdfBtn">Save as PDF</button>
+      <button id="exportBtn">Export data</button>
+      <button id="importBtn">Import backup</button>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
+    </div>
 
     <button class="danger" id="clearBtn">Clear all history</button>
   </div>
@@ -462,6 +537,229 @@ function spcNote(rows, host){
   p.textContent = "Limits are provisional — they settle after about "
     + SPC_FIRM + " sessions.";
   host.appendChild(p);
+}
+
+/* ============================================================== comparing ===
+   Everything above answers "how is this one drill going". This answers the
+   question that needed paging through them to ask: which drills are weak, and
+   weak in which way.
+
+   SPREAD IN MILLISECONDS IS NOT COMPARABLE BETWEEN DRILLS. Timing error scales
+   with the gap between onsets, so sixteenths at 160bpm will always show a
+   smaller absolute spread than quarters at 60 — not because they are played
+   better, but because there is less room to be late in. Rank drills by raw
+   milliseconds and the ranking is mostly a list of which ones are slow and
+   sparse, which would look authoritative and mean nothing.
+
+   So the overview measures spread as a FRACTION of that gap. A drill at 4.8%
+   of its onset interval really is less steady than one at 2.0%, whatever the
+   tempos involved. Bias stays in milliseconds, because being 20ms early is the
+   same thing to a listener at any tempo — which is why the README's guidance
+   is written in them. */
+
+function medianGap(pos){
+  if (!Array.isArray(pos) || pos.length < 2) return null;
+  const g = [];
+  for (let i=1;i<pos.length;i++){
+    const d = pos[i] - pos[i-1];
+    if (d > 1e-9) g.push(d);          // a polyrhythm's downbeat has two onsets
+  }
+  if (!g.length) return null;
+  g.sort((a,b) => a-b);
+  const m = g.length >> 1;
+  return g.length % 2 ? g[m] : (g[m-1] + g[m]) / 2;
+}
+
+/* Median rather than mean: a feel's onsets are deliberately uneven and a
+   polyrhythm's are uneven by construction, so the mean would be pulled around
+   by the shape of the pattern rather than describing how fast it comes at you. */
+function ioiMs(r){
+  const g = medianGap(r && r.pos);
+  return (g && r.bpm) ? g * 60000 / r.bpm : null;
+}
+
+/* Pooled in normalised units and weighted by tap count, because every session
+   brings its own tempo and therefore its own yardstick. Averaging the
+   percentages would let a nine-tap session count as much as a two-hundred. */
+function relSpread(rows){
+  let num = 0, den = 0;
+  for (const r of rows){
+    const ioi = ioiMs(r);
+    if (!ioi || !r.n) continue;
+    const s = Store.stat(r.n, r.sum, r.sq).sd / ioi;
+    num += r.n * s * s; den += r.n;
+  }
+  return den ? Math.sqrt(num/den) * 100 : null;
+}
+
+function biasMs(rows){
+  let s = 0, n = 0;
+  for (const r of rows){ s += r.sum; n += r.n; }
+  return n ? s/n : null;
+}
+const tapCount = rows => rows.reduce((a,r) => a + (r.n||0), 0);
+const lastPlayed = rows => rows.reduce((a,r) => Math.max(a, r.t||0), 0);
+
+/* Muting and ramping append to a bucket key rather than replacing it, so
+   stripping those suffixes names the drill they are variants of. They stay
+   separate buckets — drilling through silence is a harder exercise and its
+   spread should not be averaged in with the same drill played to a click — but
+   they sit together, so a long list stays navigable. */
+const famKey  = k => k.replace(/\|[mr]/g, "");
+const famKind = k => k.indexOf("poly:") === 0 ? "poly"
+                   : k.indexOf("feel:") === 0 ? "feel" : "meter";
+const KIND_NAME = { meter:"Meter and note value", feel:"Feels", poly:"Polyrhythms" };
+
+/* Under this many taps a bucket's figures are mostly the noise in their own
+   estimate, and ranking it against a well-practised one invites acting on it. */
+const THIN = 60;
+
+function families(){
+  const m = new Map();
+  for (const b of buckets){
+    const k = famKey(b.key);
+    if (!m.has(k)) m.set(k, { key:k, kind:famKind(b.key), variants:[] });
+    m.get(k).variants.push(b);
+  }
+  const out = [...m.values()];
+  for (const f of out){
+    /* The plain variant names the family; if this drill has only ever been
+       played ramped, the ramped one does. */
+    const plain = f.variants.find(v => v.key === f.key) || f.variants[0];
+    f.label = plain.label.split(" · ").slice(0, plain.key === f.key ? 99 : 2).join(" · ");
+    f.rows = f.variants.reduce((a,v) => a.concat(v.rows), []);
+    f.taps = tapCount(f.rows);
+    f.rel  = relSpread(f.rows);
+    f.bias = biasMs(f.rows);
+    f.last = lastPlayed(f.rows);
+  }
+  out.sort((a,b) => (b.rel||0) - (a.rel||0));
+  return out;
+}
+
+/* Family goes on SHAPE, not colour. This page already spends four hues on
+   meaning — rushing, dragging, on the beat, missed — and three more that stay
+   clear of those and of each other is seven categories on a dark surface,
+   which is past what can actually be told apart: every trio tried measured
+   under ΔE 8 between its own members under deutan, and as little as ΔE 1.1
+   against a hue already in use. Shape costs nothing and survives CVD intact,
+   which leaves colour saying what it says everywhere else here. */
+function mark(f, x, y, r, kind, cls, title){
+  let n;
+  if (kind === "poly"){
+    n = el("polygon", {points:[[x,y-r],[x+r,y+r*0.8],[x-r,y+r*0.8]]
+      .map(p => p.map(v=>v.toFixed(1)).join(",")).join(" "), "class":cls+" ring"});
+  } else if (kind === "feel"){
+    n = el("rect", {x:x-r*0.88, y:y-r*0.88, width:r*1.76, height:r*1.76,
+      rx:1.5, "class":cls+" ring"});
+  } else {
+    n = el("circle", {cx:x, cy:y, r:r, "class":cls+" ring"});
+  }
+  f.svg.appendChild(n);
+  const hit = el("circle", {cx:x, cy:y, r:Math.max(14,r+6), fill:"transparent",
+                            "class":"hitm"});
+  f.svg.appendChild(hit);
+  bindTip(hit, title);
+  return hit;
+}
+
+function chartCompare(fams){
+  const host = $("cx");
+  const pts = fams.filter(f => f.rel != null && f.bias != null);
+  if (pts.length < 2)
+    return none(host, "Two drills with recorded sessions are needed to compare them.");
+
+  const f = frame(host, 250, {l:44, r:16, t:14, b:34});
+  const relMax  = Math.max(6, Math.max(...pts.map(p => p.rel)) * 1.2);
+  const biasMax = Math.max(30, Math.max(...pts.map(p => Math.abs(p.bias))) * 1.25);
+  const X = v => (f.L+f.R)/2 + v/biasMax * ((f.R-f.L)/2);
+  const Y = v => f.B - v/relMax * (f.B-f.T);
+
+  for (let g=1; g<=3; g++){ const v = relMax*g/3; gridLine(f, Y(v), Math.round(v)+"%"); }
+  /* Zero bias is the line to be near, so it gets the same green vertical the
+     other charts give it horizontally. */
+  f.svg.appendChild(el("line",{x1:X(0),y1:f.T,x2:X(0),y2:f.B,"class":"zero"}));
+  for (const v of [-biasMax/2, biasMax/2]) xLabel(f, X(v), Math.round(v)+"ms");
+  xLabel(f, X(0), "0");
+
+  const lo = el("text",{x:f.L, y:f.T+2, "class":"ax"});
+  lo.textContent = "rushing"; f.svg.appendChild(lo);
+  const hi = el("text",{x:f.R, y:f.T+2, "text-anchor":"end", "class":"ax"});
+  hi.textContent = "dragging"; f.svg.appendChild(hi);
+
+  /* Size carries how much the dot is worth listening to. A drill with forty
+     sessions behind it and one with two should not look equally certain. */
+  const maxT = Math.max(...pts.map(p => p.taps));
+  const rOf = t => 4 + 4 * Math.sqrt(Math.min(1, t/Math.max(maxT,1)));
+
+  for (const p of pts){
+    const x = X(Math.max(-biasMax, Math.min(biasMax, p.bias))), y = Y(Math.min(relMax, p.rel));
+    const thin = p.taps < THIN;
+    const hit = mark(f, x, y, rOf(p.taps), p.kind,
+      "m-" + devTone(p.bias) + (thin ? " thin" : ""),
+      "<b>" + p.label + "</b><br>" + p.rel.toFixed(1) + "% spread<br>" +
+      ms(p.bias) + " ms average<br>" + p.taps + " taps over " +
+      p.rows.length + " session" + (p.rows.length===1?"":"s") +
+      (thin ? "<br><i>too few taps to rank confidently</i>" : "") +
+      "<br><b>tap to open</b>");
+    hit.style.cursor = "pointer";
+    hit.addEventListener("click", () => openDetail(p.variants[0].key));
+  }
+
+  $("lx").innerHTML =
+    '<span><i class="shp circ"></i>meter &amp; note</span>' +
+    '<span><i class="shp sq"></i>feel</span>' +
+    '<span><i class="shp tri"></i>polyrhythm</span>' +
+    '<span>bigger dot = more taps behind it</span>' +
+    '<span>faint = under ' + THIN + ' taps</span>';
+}
+
+/* The list that replaced the row of chips. It is also the only place a drill
+   you have stopped playing can show up, which is a weakness no average will
+   ever report. */
+function renderFamilies(fams){
+  const host = $("famList"); host.innerHTML = "";
+  const byKind = { meter:[], feel:[], poly:[] };
+  for (const f of fams) byKind[f.kind].push(f);
+
+  const now = Date.now();
+  const ago = t => {
+    const d = Math.floor((now - t) / 86400000);
+    return d <= 0 ? "today" : d === 1 ? "yesterday" : d + " days ago";
+  };
+
+  for (const kind of ["meter","feel","poly"]){
+    if (!byKind[kind].length) continue;
+    const h = document.createElement("h3");
+    h.className = "famkind"; h.textContent = KIND_NAME[kind];
+    host.appendChild(h);
+
+    for (const f of byKind[kind]){
+      const box = document.createElement("div");
+      box.className = "fam";
+      for (const v of f.variants){
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = "famrow" + (v.key === sel ? " sel" : "");
+        const rel = relSpread(v.rows), taps = tapCount(v.rows);
+        /* The variant's own suffix, or the drill's name for the plain one, so
+           a nested row never repeats the heading above it. */
+        const tail = v.label.slice(f.label.length).replace(/^ · /, "");
+        row.innerHTML =
+          '<span class="fname">' + (tail || f.label) + '</span>' +
+          '<span class="frel' + (taps < THIN ? " thin" : "") + '">' +
+            (rel == null ? "—" : rel.toFixed(1) + "%") + '</span>' +
+          '<span class="fmeta">' + v.rows.length + ' · ' + ago(lastPlayed(v.rows)) + '</span>';
+        /* Both channels set here rather than through ui.js's label(): this page
+           does not load ui.js, and the two lines are cheaper than the coupling. */
+        row.setAttribute("aria-label", "Open " + v.label);
+        row.title = "Open " + v.label;
+        row.onclick = () => openDetail(v.key);
+        box.appendChild(row);
+      }
+      host.appendChild(box);
+    }
+  }
 }
 
 /* ------------------------------------------------------------------ tooltip */
@@ -807,17 +1105,29 @@ function renderCharts(){
   table(b.rows);
 }
 
-function renderPicker(){
-  const host = $("bucketPick"); host.innerHTML = "";
-  for (const b of buckets){
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "chip" + (b.key===sel ? " sel" : "");
-    btn.innerHTML = b.label + '<span class="ct">'+b.rows.length+'</span>';
-    btn.onclick = () => { sel = b.key; renderPicker(); renderCharts(); };
-    host.appendChild(btn);
-  }
+/* Two views, one page. Overview compares every drill; detail is one drill's
+   four charts. sel being null IS the overview — there is no third state, and
+   nothing has to be remembered about how you got here. */
+function showOverview(){
+  sel = null;
+  $("overview").hidden = false;
+  $("detail").hidden = true;
+  const fams = families();
+  chartCompare(fams);
+  renderFamilies(fams);
+  scrollTo(0, 0);
 }
+
+function openDetail(key){
+  if (!buckets.some(b => b.key === key)) return;
+  sel = key;
+  $("overview").hidden = true;
+  $("detail").hidden = false;
+  renderCharts();
+  scrollTo(0, 0);
+}
+
+$("backBtn").onclick = showOverview;
 
 function boot(){
   buckets = Store.buckets();
@@ -825,9 +1135,10 @@ function boot(){
   $("empty").hidden = has;
   $("content").hidden = !has;
   if (!has) return;
-  if (!buckets.some(b => b.key === sel)) sel = buckets[0].key;
-  renderPicker();
-  renderCharts();
+  /* Re-entering after an import or a clear returns to whichever drill was
+     open, if it still exists, and to the overview if it does not. */
+  if (sel && buckets.some(b => b.key === sel)) openDetail(sel);
+  else showOverview();
 }
 
 $("tableToggle").onclick = () => {
