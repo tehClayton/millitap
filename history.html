@@ -227,16 +227,22 @@
   button:active{background:var(--panel-hi);box-shadow:none}
   button:focus-visible{outline:2px solid var(--true);outline-offset:2px}
   .danger{color:var(--miss);border-color:rgba(194,86,107,.45);background:none;
-    box-shadow:none;justify-self:start}
+    box-shadow:none;align-self:start}
   .note{font-size:12px;line-height:1.6;color:var(--ink-dim);max-width:62ch}
-  .exportbar{display:flex;flex-wrap:wrap;gap:var(--sp2)}
+  .btnrow{display:flex;flex-wrap:wrap;gap:var(--sp2)}
+
+  /* Separated by a rule and a good deal of space, because the only protection
+     a destructive control really has is not being near the one you meant. */
+  .dangerzone{display:grid;gap:var(--sp3);justify-items:start;
+    margin-top:var(--sp5);padding-top:var(--sp5);
+    border-top:1px solid var(--rule)}
   .rhead{display:none}
 
   @media print{
     @page{margin:14mm 12mm}
     body{background:#fff!important;background-image:none!important;
       color:var(--ink);padding:0}
-    .topbar,.pick,.exportbar,#clearBtn,#tableToggle,#tip{display:none!important}
+    .topbar,.pick,.btnrow,.dangerzone,#tableToggle,#tip,.back{display:none!important}
     .wrap{max-width:none;margin:0;padding:0;gap:11px}
     .rhead{display:block}
     .rhead h2{font-size:15px;font-weight:600;letter-spacing:.01em}
@@ -342,16 +348,27 @@
       </section>
     </div>
 
-    <!-- Backup and clearing act on everything, so they sit outside both views
-         rather than belonging to whichever drill happens to be open. -->
-    <div class="exportbar">
-      <button id="pdfBtn">Save as PDF</button>
-      <button id="exportBtn">Export data</button>
-      <button id="importBtn">Import backup</button>
-      <input type="file" id="importFile" accept="application/json,.json" hidden>
-    </div>
+    <!-- Backup acts on everything, so it sits outside both views rather than
+         belonging to whichever drill happens to be open. It gets a card like
+         every other block on the page, instead of three loose buttons. -->
+    <section class="card">
+      <h2>Your data <span class="hint">every session on this device, one file</span></h2>
+      <div class="btnrow">
+        <button id="pdfBtn">Save as PDF</button>
+        <button id="exportBtn">Export data</button>
+        <button id="importBtn">Import backup</button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
+      </div>
+    </section>
 
-    <button class="danger" id="clearBtn">Clear all history</button>
+    <!-- Deliberately alone, below a rule and a screen's worth of nothing. It
+         was previously the next button after Import backup, which is a thumb's
+         width from irreversibly deleting everything you have recorded. -->
+    <section class="dangerzone">
+      <p class="note">Clearing removes every session recorded on this device.
+        There is no undo — export first if you might want them back.</p>
+      <button class="danger" id="clearBtn">Clear all history</button>
+    </section>
   </div>
 
 </div>
