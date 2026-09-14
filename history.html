@@ -623,6 +623,18 @@ function biasMs(rows){
 const tapCount = rows => rows.reduce((a,r) => a + (r.n||0), 0);
 const lastPlayed = rows => rows.reduce((a,r) => Math.max(a, r.t||0), 0);
 
+/* The gap these percentages are a percentage OF, tap-weighted across a
+   bucket's sessions, so the hover text can also say what the figure amounts to
+   in the milliseconds a player actually feels. */
+function meanIoi(rows){
+  let num = 0, den = 0;
+  for (const r of rows){
+    const g = ioiMs(r);
+    if (!g || !r.n) continue;
+    num += r.n * g; den += r.n;
+  }
+  return den ? num/den : null;
+}
 
 /* Muting and ramping append to a bucket key rather than replacing it, so
    stripping those suffixes names the drill they are variants of. They stay
@@ -775,11 +787,29 @@ function renderFamilies(fams){
         /* The variant's own suffix, or the drill's name for the plain one, so
            a nested row never repeats the heading above it. */
         const tail = v.label.slice(f.label.length).replace(/^ · /, "");
+        /* A percentage of what, said where the percentage is. A title on a
+           child wins over the row's own while the pointer is on that child, so
+           the figure explains itself and the rest of the row still says it
+           opens. It quotes the milliseconds as well: the share is what makes
+           the column comparable, the milliseconds are what you can feel. */
+        const gap = meanIoi(v.rows);
+        const why = rel == null
+          ? "Not enough recorded to measure a spread."
+          : "Spread is " + rel.toFixed(1) + "% of the gap between onsets" +
+            (gap ? " — about " + (rel/100*gap).toFixed(1) + "ms at this drill's "
+                   + Math.round(gap) + "ms spacing" : "") +
+            ". Lower is steadier, and the share is comparable between drills " +
+            "whatever their tempo, where milliseconds are not." +
+            (v.rows.length < THIN
+              ? " Under " + THIN + " sessions, so treat it as provisional."
+              : "");
         row.innerHTML =
           '<span class="fname">' + (tail || f.label) + '</span>' +
-          '<span class="frel' + (v.rows.length < THIN ? " thin" : "") + '">' +
+          '<span class="frel' + (v.rows.length < THIN ? " thin" : "") + '"' +
+            ' title="' + why.replace(/"/g, "&quot;") + '">' +
             (rel == null ? "—" : rel.toFixed(1) + "%") + '</span>' +
-          '<span class="fmeta">' + v.rows.length + ' · ' + ago(lastPlayed(v.rows)) + '</span>';
+          '<span class="fmeta" title="Sessions recorded, and when you last played it">' +
+            v.rows.length + ' · ' + ago(lastPlayed(v.rows)) + '</span>';
         /* Both channels set here rather than through ui.js's label(): this page
            does not load ui.js, and the two lines are cheaper than the coupling. */
         row.setAttribute("aria-label", "Open " + v.label);
