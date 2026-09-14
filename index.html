@@ -132,6 +132,28 @@
   .tval::before, .tramp::before{content:"";position:absolute;left:0;right:0;
     top:calc(0px - var(--reach));bottom:calc(0px - var(--reach))}
 
+  /* The value again, floated clear of the thumb that is covering it. Raised
+     above everything including the modals, since the set editor scrubs too,
+     and inert to pointers so it can never eat the drag it is reporting on.
+     Shown only for touch and pen — ui.js decides that from the pointer doing
+     the dragging, not from what kind of device this is. */
+  #scrubPop{position:fixed;z-index:40;left:0;top:0;
+    transform:translate(-50%,-100%) scale(.92);transform-origin:50% 100%;
+    padding:7px 13px;border-radius:var(--r2);pointer-events:none;
+    background:#0B1116;border:1px solid var(--true);
+    box-shadow:0 10px 26px rgba(0,0,0,.6);
+    font-family:var(--fig);font-size:26px;font-weight:500;line-height:1;
+    font-variant-numeric:tabular-nums;letter-spacing:-.02em;color:var(--true);
+    opacity:0;visibility:hidden;
+    transition:opacity .09s linear, transform .09s ease-out}
+  #scrubPop.on{opacity:1;visibility:visible;transform:translate(-50%,-100%) scale(1)}
+  /* A caret joining the bubble to the field it belongs to, so two fields side
+     by side cannot be confused about which one is being changed. */
+  #scrubPop::after{content:"";position:absolute;left:50%;top:100%;
+    margin-left:-5px;border:5px solid transparent;border-top-color:var(--true)}
+  @media (prefers-reduced-motion:reduce){
+    #scrubPop{transition:none}
+  }
   .tval.drag i{color:var(--ink-dim)}
   .tval:focus-visible{outline:2px solid var(--true);outline-offset:2px}
   /* The live readout is output, not input: no raised face, nothing to grab. */
@@ -1778,12 +1800,17 @@ $("polyTog").onclick = () => {
    the gesture every DAW uses on a value field. px is how far you drag for one
    notch, so the seconds field moves five at a time over a range twelve times
    wider than the tempo without feeling twelve times slower. */
-
-
+/* fmt is what the floating readout says while a thumb is over the field. The
+   field's own unit label sits under the number and is covered along with it,
+   so the bubble has to carry the unit or it would report a bare 45 for both a
+   tempo and a duration. */
 const TF = {
-  tFrom: { get:()=>cfg.bpm,       set:v=>cfg.bpm=v,       min:30, max:220, step:1, px:3 },
-  tTo:   { get:()=>cfg.ramp.to,   set:v=>cfg.ramp.to=v,   min:30, max:220, step:1, px:3 },
-  tSecs: { get:()=>cfg.ramp.secs, set:v=>cfg.ramp.secs=v, min:5,  max:600, step:5, px:3 }
+  tFrom: { get:()=>cfg.bpm,       set:v=>cfg.bpm=v,       min:30, max:220, step:1, px:3,
+           fmt:v=>v+" bpm" },
+  tTo:   { get:()=>cfg.ramp.to,   set:v=>cfg.ramp.to=v,   min:30, max:220, step:1, px:3,
+           fmt:v=>v+" bpm" },
+  tSecs: { get:()=>cfg.ramp.secs, set:v=>cfg.ramp.secs=v, min:5,  max:600, step:5, px:3,
+           fmt:v=>mmss(v) }
 };
 
 function setField(id, v){
@@ -2023,6 +2050,9 @@ function renderSteps(t, host){
                   len.setAttribute("aria-valuenow", v);
                   sub.textContent = dur(); },
       min: secs ? 5 : 1, max: secs ? 1800 : 64, step: secs ? 5 : 1, px: 3,
+      // The unit is on the toggle beside the field, not under the number, so
+      // the bubble spells it out rather than floating a bare count.
+      fmt: v => secs ? mmss(v) : v + (v === 1 ? " bar" : " bars"),
       commit: () => { saveSet(t); renderSetModal(); }
     });
 
