@@ -128,6 +128,24 @@
   .w-rush{stroke:var(--rush)} .w-drag{stroke:var(--drag)} .w-true{stroke:var(--true)}
   .whisk{stroke-width:4;stroke-opacity:.34;stroke-linecap:round}
   .missx{stroke:var(--miss);stroke-width:2;stroke-linecap:round}
+
+  /* Control limits are reference, not data: dashed and recessive, so the
+     sessions stay the thing you look at and the boundary stays the thing you
+     look them up against. The centre line is solid because it is a fact about
+     you rather than a threshold. */
+  .lim{fill:none;stroke:var(--ink-mute);stroke-width:1.25;stroke-dasharray:5 4;
+    stroke-opacity:.75;stroke-linejoin:round}
+  .cl{fill:none;stroke:var(--ink-dim);stroke-width:1.25;stroke-opacity:.6;
+    stroke-linejoin:round}
+  .limlab{fill:var(--ink-mute);font-size:8px;letter-spacing:.06em;opacity:.85}
+  /* A signal keeps its mark's own colour — tempo on one chart, direction on
+     the other — and is called out by size and an outer ring instead, so the
+     flag never has to borrow a hue that already means something else. */
+  .sigring{fill:none;stroke:var(--miss);stroke-width:1.75;stroke-opacity:.9}
+  /* A border rather than an inset shadow: this is the one swatch that reads as
+     an outline instead of a fill, and browsers drop shadows on print far more
+     readily than they drop borders. */
+  .sw.k-sig{background:transparent;border:2px solid var(--miss)}
   .t0{fill:var(--t0)} .t1{fill:var(--t1)} .t2{fill:var(--t2)}
   .t3{fill:var(--t3)} .t4{fill:var(--t4)}
   .sw.k-rush{background:var(--rush)} .sw.k-drag{background:var(--drag)}
@@ -229,13 +247,15 @@
     <div class="tiles" id="tiles"></div>
 
     <section class="card">
-      <h2>Spread over sessions <span class="hint">lower is steadier · colour is tempo</span></h2>
+      <h2>Spread over sessions
+        <span class="hint">limits are your session-to-session noise · ringed points are signals</span></h2>
       <div class="chart" id="c1"></div>
       <div class="legend" id="l1"></div>
     </section>
 
     <section class="card">
-      <h2>Average offset <span class="hint">shaded band is normal, not an error</span></h2>
+      <h2>Average offset
+        <span class="hint">shaded band is normal · centre line is your habit</span></h2>
       <div class="chart" id="c2"></div>
       <div class="legend" id="l2"></div>
     </section>
@@ -282,6 +302,168 @@ const devTone = d => d < -4 ? "rush" : d > 4 ? "drag" : "true";
 
 let buckets = [], sel = null;
 
+/* ==================================================================== spc ====
+   The two over-time charts are individuals charts — XmR — over the per-session
+   statistics: one point per session, limits from the moving range between
+   consecutive sessions.
+
+   The question they answer is the Shewhart one. Is this process in control, or
+   has something shifted that random error alone cannot account for? Everything
+   below follows from what "random error" is taken to mean here, so it is worth
+   being explicit: it is the ORDINARY CHURN FROM ONE SITTING TO THE NEXT, not
+   the tap-to-tap noise inside a single sitting.
+
+   That choice is the whole design. Treating a session as a subgroup and
+   building limits from within-session spread is the literal translation of the
+   factory chart, and it fails here for two reasons. Subgroup size is not
+   designed — n is however long you happened to play, where a factory fixes it
+   at five an hour precisely so subgroups compare. And your session-to-session
+   variation is genuinely far larger than your tap-to-tap variation, so limits
+   drawn from the latter are crossed constantly by things you already know
+   about: a tempo change, a cold start, a different drill. A chart that signals
+   on every session reports nothing.
+
+   Moving ranges take those in as common cause and ask the more useful
+   question: is this session unlike your usual run of sessions? They also stay
+   honest under improvement, because consecutive differences measure short-term
+   variation — a steady gain produces small differences, so the limits stay
+   narrow and the gain surfaces as a run or a trend rather than being absorbed
+   into limits wide enough to contain it.
+
+   READ THE SIGNALS FORWARD, NOT AS FAULTS. In a factory a signal means
+   something broke. Practising is the opposite: you are deliberately trying to
+   move the mean and shrink the spread, so a signal here is usually the
+   evidence that it worked, and a chart with no signals at all is a plateau
+   rather than a success. */
+
+/* d2 for a moving range of two consecutive points. sigma = mRbar/d2 is the
+   standard estimator; 3 sigma then works out as the familiar 2.66 * mRbar. */
+const D2 = 1.128;
+
+function movingRanges(vals){
+  const out = [];
+  for (let i=1;i<vals.length;i++) out.push(Math.abs(vals[i]-vals[i-1]));
+  return out;
+}
+
+/* Centre line, sigma and limits for one series of per-session values.
+   Returns null when limits would be meaningless rather than drawing a pair of
+   lines that only look authoritative: fewer than two points gives no range at
+   all, and a dead-flat series gives a zero one, which would collapse the
+   limits onto the centre and flag every point that ever moves.
+
+   floor clamps the lower limit for a quantity that cannot go negative — a
+   spread of less than zero is not a tighter session, it is an arithmetic
+   artefact of a symmetric interval. */
+function xmr(vals, floor){
+  if (!vals || vals.length < 2) return null;
+  const mr = movingRanges(vals);
+  const mrBar = mr.reduce((a,b) => a+b, 0) / mr.length;
+  const sigma = mrBar / D2;
+  if (!(sigma > 0)) return null;
+  const centre = vals.reduce((a,b) => a+b, 0) / vals.length;
+  const lcl = centre - 3*sigma;
+  return { centre, sigma, mrBar,
+           ucl: centre + 3*sigma,
+           lcl: floor != null ? Math.max(floor, lcl) : lcl };
+}
+
+/* Below this, limits computed from the data would mostly describe the noise in
+   their own estimate. The charts fall back to a plain trend until there are
+   enough, and say so rather than drawing authoritative-looking lines. */
+const SPC_MIN = 8;
+/* Individuals limits keep moving for a while. Between the two counts they are
+   drawn but labelled provisional. */
+const SPC_FIRM = 20;
+
+/* Nelson / Western Electric, the subset that says something about practice:
+   1 — a point outside the limits: this session was not like the others
+   2 — eight on one side: the level has moved and stayed moved
+   3 — six climbing or falling: it is moving now
+   5 — two of three out past 2 sigma: a shift too big to sit on
+
+   Rule 4 (fourteen alternating) is left out: it detects over-adjustment in a
+   machine, and nothing in a practice session corresponds to it.
+
+   Rules 2 and 3 are the ones that will earn their keep here, because getting
+   better is a sustained shift rather than a single wild session — and a run of
+   eight on the good side of your own average is exactly the evidence that
+   something changed. */
+function spcSignals(vals, cl, sig){
+  const n = vals.length, flags = vals.map(() => []);
+  const z = i => (vals[i] - cl) / sig;
+
+  for (let i=0;i<n;i++) if (Math.abs(z(i)) > 3) flags[i].push(1);
+
+  for (let i=7;i<n;i++){
+    const side = Math.sign(z(i));
+    if (!side) continue;
+    let run = true;
+    for (let k=i-7;k<=i;k++) if (Math.sign(z(k)) !== side){ run = false; break; }
+    if (run) flags[i].push(2);
+  }
+
+  for (let i=5;i<n;i++){
+    let up = true, down = true;
+    for (let k=i-4;k<=i;k++){
+      if (!(vals[k] > vals[k-1])) up = false;
+      if (!(vals[k] < vals[k-1])) down = false;
+    }
+    if (up || down) flags[i].push(3);
+  }
+
+  /* Two of any three consecutive, both on the same side and both past 2 sigma.
+     Flagged on the later of the two, which is the point you are looking at when
+     the pattern completes. */
+  for (let i=2;i<n;i++){
+    for (const side of [1,-1]){
+      const far = [i-2,i-1,i].filter(k => side*z(k) > 2);
+      if (far.length >= 2 && far[far.length-1] === i) flags[i].push(5);
+    }
+  }
+  return flags;
+}
+
+const RULE_TEXT = {
+  1:"outside the limits",
+  2:"eight in a row on one side",
+  3:"six in a row moving one way",
+  5:"two of three past 2σ"
+};
+
+/* One flat limit across the whole chart — with individuals there is no
+   subgroup size for it to depend on, so a single pair of lines is not a
+   simplification of the maths, it is the maths. */
+function limitFlat(f, y, cls){
+  if (y < f.T - 40 || y > f.B + 40) return;
+  f.svg.appendChild(el("line",{x1:f.L,y1:y,x2:f.R,y2:y,"class":cls}));
+}
+
+/* Names a limit at its right-hand end, and only if that end is on screen — a
+   limit pushed off the frame by an outlier should not leave its caption
+   floating against the edge. */
+function limitLabel(f, y, text){
+  if (y < f.T + 6 || y > f.B - 2) return;
+  const t = el("text",{x:f.R-2,y:y-4,"text-anchor":"end","class":"limlab"});
+  t.textContent = text; f.svg.appendChild(t);
+}
+
+/* A signalling point keeps its own fill — tempo on one chart, direction on the
+   other — and is marked by size and an outer ring instead, so the signal never
+   competes with the colour already carrying meaning. */
+function signalRing(f, x, y){
+  f.svg.appendChild(el("circle",{cx:x,cy:y,r:8.5,"class":"sigring"}));
+}
+
+function spcNote(rows, host){
+  if (rows.length >= SPC_FIRM) return;
+  const p = document.createElement("p");
+  p.className = "note";
+  p.textContent = "Limits are provisional — they settle after about "
+    + SPC_FIRM + " sessions.";
+  host.appendChild(p);
+}
+
 /* ------------------------------------------------------------------ tooltip */
 const tip = $("tip");
 function bindTip(node, html){
@@ -326,13 +508,25 @@ function dot(f, x, y, tone, title){
 }
 function none(host, msg){ host.innerHTML = '<div class="none">'+msg+'</div>'; }
 
-/* ------------------------------------------------------- 1 · spread / session */
+/* ------------------------------------------------ 1 · spread over sessions (X)
+   One point per session and one flat pair of limits, asking whether this
+   session's consistency is inside the range your consistency normally moves
+   through. Above the upper limit is a session that was genuinely scrappier
+   than your own churn explains; below the lower limit is the one to look at
+   hardest, because that is steadiness you have not shown before. */
 function chartSpread(rows){
   const host = $("c1");
   if (rows.length < 1) return none(host, "No sessions yet.");
   const f = frame(host, 190, {l:40,r:14,t:10,b:26});
   const vals = rows.map(r => Store.stat(r.n,r.sum,r.sq).sd);
-  const hi = Math.max(12, Math.max(...vals)*1.15);
+
+  /* Floored at zero: a spread below it is not a tighter session, only the
+     lower half of a symmetric interval running off the end of what the
+     quantity can be. */
+  const k = rows.length >= SPC_MIN ? xmr(vals, 0) : null;
+  const flags = k ? spcSignals(vals, k.centre, k.sigma) : vals.map(()=>[]);
+
+  const hi = Math.max(12, (k ? Math.max(...vals, k.ucl) : Math.max(...vals))*1.15);
   const bpms = rows.map(r => r.bpm);
   const lo = Math.min(...bpms), hb = Math.max(...bpms);
   const step = b => "t" + (hb===lo ? RAMP-1
@@ -343,39 +537,77 @@ function chartSpread(rows){
 
   for (let g=0; g<=3; g++){ const v=hi*g/3; gridLine(f, Y(v), Math.round(v)); }
 
+  if (k){
+    limitFlat(f, Y(k.ucl), "lim");
+    limitFlat(f, Y(k.centre), "cl");
+    limitFlat(f, Y(k.lcl), "lim");
+    limitLabel(f, Y(k.ucl), "upper limit");
+    limitLabel(f, Y(k.lcl), "lower limit");
+  }
+
   if (rows.length > 1){
     f.svg.appendChild(el("polyline",{
       points: vals.map((v,i)=>X(i)+","+Y(v)).join(" "), "class":"trend"}));
   }
   rows.forEach((r,i) => {
-    const sd = vals[i];
-    dot(f, X(i), Y(sd), step(r.bpm),
-      "<b>"+sd.toFixed(1)+" ms spread</b><br>"+r.bpm+" bpm · "+r.n+" taps<br>"+
-      fmtDate(r.t));
+    const sdv = vals[i];
+    if (flags[i].length) signalRing(f, X(i), Y(sdv));
+    dot(f, X(i), Y(sdv), step(r.bpm),
+      "<b>"+sdv.toFixed(1)+" ms spread</b><br>"+r.bpm+" bpm · "+r.n+" taps<br>"+
+      fmtDate(r.t) +
+      (flags[i].length
+        ? "<br><b>signal:</b> " + flags[i].map(x=>RULE_TEXT[x]).join("; ")
+        : ""));
   });
   xLabel(f, f.L, fmtDate(rows[0].t));
   if (rows.length > 1) xLabel(f, f.R, fmtDate(rows[rows.length-1].t));
 
   let sw = "";
   for (let i=0;i<RAMP;i++) sw += '<i class="t'+i+'"></i>';
+  const sigs = flags.filter(x => x.length).length;
   $("l1").innerHTML =
     '<span>slow <span class="ramp">'+sw+'</span> fast</span>'+
-    '<span>'+lo+'–'+hb+' bpm</span>';
+    '<span>'+lo+'–'+hb+' bpm</span>'+
+    (k
+      ? '<span><i class="sw k-sig"></i>'+
+        (sigs ? sigs+' signal'+(sigs===1?'':'s') : 'no signals — in control')+'</span>'
+      : '<span>'+SPC_MIN+' sessions needed for limits</span>');
+  if (k) spcNote(rows, host);
 }
 
-/* ---------------------------------------------------------- 2 · bias / session */
+/* ----------------------------------------------- 2 · average offset / session
+   Where the limits earn their keep. A session averaging 9ms early looks like a
+   change from one averaging 3ms, and almost never is — the limits say how far
+   your average wanders between sittings when nothing has moved, so the
+   sessions that really did move stop being buried among the ones that only
+   look like it.
+
+   Three horizontal references, deliberately drawn differently, because they
+   mean three different things. Zero is where the beat is. The centre line is
+   where YOU are, and the gap between them is your habit, not your error. The
+   limits are how far from your own centre chance alone will carry you. */
 function chartBias(rows){
   const host = $("c2");
   if (rows.length < 1) return none(host, "No sessions yet.");
   const f = frame(host, 180, {l:40,r:14,t:10,b:26});
   const means = rows.map(r => Store.stat(r.n,r.sum,r.sq).mean);
-  const span = Math.max(60, Math.max(...means.map(Math.abs))*1.25);
+
+  // No floor: a mean offset is signed, and both directions are real.
+  const k = rows.length >= SPC_MIN ? xmr(means) : null;
+  const flags = k ? spcSignals(means, k.centre, k.sigma) : means.map(()=>[]);
+
+  /* The scale has to hold the limits as well as the points, or a run of tidy
+     sessions would push the limits off the frame and the chart would look like
+     it had none. */
+  const reach = k ? Math.max(Math.abs(k.ucl), Math.abs(k.lcl)) : 0;
+  const span = Math.max(60, Math.max(...means.map(Math.abs), reach)*1.25);
   const X = i => rows.length===1 ? (f.L+f.R)/2 : f.L + i/(rows.length-1)*(f.R-f.L);
   const Y = v => (f.T+f.B)/2 - v/span*((f.B-f.T)/2);
 
   /* The README is emphatic that 20–50 ms early is normal and should be left
      alone. Drawing it as expected territory stops the chart from teaching the
-     opposite of what the app teaches. */
+     opposite of what the app teaches — and it answers a different question
+     from the limits, which only ever compare you against yourself. */
   f.svg.appendChild(el("rect",{x:f.L,y:Y(-20),width:f.R-f.L,height:Y(-50)-Y(-20),
     "class":"band"}));
   const bl = el("text",{x:f.L+5,y:Y(-35)+3,"class":"bandlab"});
@@ -384,17 +616,39 @@ function chartBias(rows){
   for (const v of [span/2, -span/2]) gridLine(f, Y(v), Math.round(v));
   f.svg.appendChild(el("line",{x1:f.L,y1:Y(0),x2:f.R,y2:Y(0),"class":"zero"}));
 
+  if (k){
+    limitFlat(f, Y(k.ucl), "lim");
+    limitFlat(f, Y(k.centre), "cl");
+    limitFlat(f, Y(k.lcl), "lim");
+    limitLabel(f, Y(k.ucl), "upper limit");
+    limitLabel(f, Y(k.lcl), "lower limit");
+  }
+
   if (rows.length > 1){
     f.svg.appendChild(el("polyline",{
       points: means.map((v,i)=>X(i)+","+Y(v)).join(" "), "class":"trend"}));
   }
-  rows.forEach((r,i) => dot(f, X(i), Y(means[i]), "m-"+devTone(means[i]),
-    "<b>"+ms(means[i])+" ms average</b><br>"+r.bpm+" bpm · "+r.n+" taps<br>"+fmtDate(r.t)));
+  rows.forEach((r,i) => {
+    if (flags[i].length) signalRing(f, X(i), Y(means[i]));
+    dot(f, X(i), Y(means[i]), "m-"+devTone(means[i]),
+      "<b>"+ms(means[i])+" ms average</b><br>"+r.bpm+" bpm · "+r.n+" taps<br>"+
+      fmtDate(r.t) +
+      (flags[i].length
+        ? "<br><b>signal:</b> " + flags[i].map(x=>RULE_TEXT[x]).join("; ")
+        : ""));
+  });
 
+  const sigs = flags.filter(x => x.length).length;
   $("l2").innerHTML =
     '<span><i class="sw k-rush"></i>rushing</span>'+
     '<span><i class="sw k-true"></i>on the beat</span>'+
-    '<span><i class="sw k-drag"></i>dragging</span>';
+    '<span><i class="sw k-drag"></i>dragging</span>'+
+    (k
+      ? '<span><i class="sw k-sig"></i>'+
+        (sigs ? sigs+' signal'+(sigs===1?'':'s') : 'no signals — in control')+'</span>'+
+        '<span>you centre on '+ms(k.centre)+' ms</span>'
+      : '<span>'+SPC_MIN+' sessions needed for limits</span>');
+  if (k) spcNote(rows, host);
 }
 
 /* ------------------------------------------------------- 3 · by bar position */
