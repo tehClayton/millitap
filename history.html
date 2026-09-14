@@ -610,9 +610,15 @@ const famKind = k => k.indexOf("poly:") === 0 ? "poly"
                    : k.indexOf("feel:") === 0 ? "feel" : "meter";
 const KIND_NAME = { meter:"Meter and note value", feel:"Feels", poly:"Polyrhythms" };
 
-/* Under this many taps a bucket's figures are mostly the noise in their own
-   estimate, and ranking it against a well-practised one invites acting on it. */
-const THIN = 60;
+/* Under this many SESSIONS a drill's figures are mostly the noise in their own
+   estimate, and ranking it against a well-practised one invites acting on it.
+
+   Counted in sessions rather than taps because taps are the wrong unit for the
+   question. A single sitting can easily run two hundred of them, which would
+   clear any tap threshold worth setting while still being one day, at one
+   tempo, in one mood — the three things a drill's figure is supposed to
+   average over. It matches SPC_MIN for the same reason the charts do. */
+const THIN = 5;
 
 function families(){
   const m = new Map();
@@ -694,13 +700,13 @@ function chartCompare(fams){
 
   for (const p of pts){
     const x = X(Math.max(-biasMax, Math.min(biasMax, p.bias))), y = Y(Math.min(relMax, p.rel));
-    const thin = p.taps < THIN;
+    const thin = p.rows.length < THIN;
     const hit = mark(f, x, y, rOf(p.taps), p.kind,
       "m-" + devTone(p.bias) + (thin ? " thin" : ""),
       "<b>" + p.label + "</b><br>" + p.rel.toFixed(1) + "% spread<br>" +
       ms(p.bias) + " ms average<br>" + p.taps + " taps over " +
       p.rows.length + " session" + (p.rows.length===1?"":"s") +
-      (thin ? "<br><i>too few taps to rank confidently</i>" : "") +
+      (thin ? "<br><i>too few sessions to rank confidently</i>" : "") +
       "<br><b>tap to open</b>");
     hit.style.cursor = "pointer";
     hit.addEventListener("click", () => openDetail(p.variants[0].key));
@@ -711,7 +717,7 @@ function chartCompare(fams){
     '<span><i class="shp sq"></i>feel</span>' +
     '<span><i class="shp tri"></i>polyrhythm</span>' +
     '<span>bigger dot = more taps behind it</span>' +
-    '<span>faint = under ' + THIN + ' taps</span>';
+    '<span>faint = under ' + THIN + ' sessions</span>';
 }
 
 /* The list that replaced the row of chips. It is also the only place a drill
@@ -741,13 +747,13 @@ function renderFamilies(fams){
         const row = document.createElement("button");
         row.type = "button";
         row.className = "famrow" + (v.key === sel ? " sel" : "");
-        const rel = relSpread(v.rows), taps = tapCount(v.rows);
+        const rel = relSpread(v.rows);
         /* The variant's own suffix, or the drill's name for the plain one, so
            a nested row never repeats the heading above it. */
         const tail = v.label.slice(f.label.length).replace(/^ · /, "");
         row.innerHTML =
           '<span class="fname">' + (tail || f.label) + '</span>' +
-          '<span class="frel' + (taps < THIN ? " thin" : "") + '">' +
+          '<span class="frel' + (v.rows.length < THIN ? " thin" : "") + '">' +
             (rel == null ? "—" : rel.toFixed(1) + "%") + '</span>' +
           '<span class="fmeta">' + v.rows.length + ' · ' + ago(lastPlayed(v.rows)) + '</span>';
         /* Both channels set here rather than through ui.js's label(): this page
