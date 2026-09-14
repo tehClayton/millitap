@@ -150,6 +150,12 @@
   .t3{fill:var(--t3)} .t4{fill:var(--t4)}
   .sw.k-rush{background:var(--rush)} .sw.k-drag{background:var(--drag)}
   .sw.k-true{background:var(--true)} .sw.k-miss{background:var(--miss)}
+  /* Round, because these stand for marks rather than for colours. Neutral for
+     the same reason the overview's shape key is: the shape is the message, and
+     the hue is already spent on rushing and dragging. A border rather than an
+     inset shadow, since browsers drop shadows on print far more readily. */
+  .sw.mk{border-radius:50%;background:var(--ink-dim)}
+  .sw.mk.hollow{background:var(--panel);border:2px solid var(--ink-dim)}
   .ramp i.t0{background:var(--t0)} .ramp i.t1{background:var(--t1)}
   .ramp i.t2{background:var(--t2)} .ramp i.t3{background:var(--t3)}
   .ramp i.t4{background:var(--t4)}
@@ -617,6 +623,7 @@ function biasMs(rows){
 const tapCount = rows => rows.reduce((a,r) => a + (r.n||0), 0);
 const lastPlayed = rows => rows.reduce((a,r) => Math.max(a, r.t||0), 0);
 
+
 /* Muting and ramping append to a bucket key rather than replacing it, so
    stripping those suffixes names the drill they are variants of. They stay
    separate buckets — drilling through silence is a harder exercise and its
@@ -1045,10 +1052,22 @@ function chartPositions(rows){
       s.sd.toFixed(1)+" ms spread<br>"+s.n+" taps");
   });
 
+  /* Under a polyrhythm the marks carry a second encoding — solid for the
+     cross-rhythm, hollow for the pulse — and until now nothing on the page
+     said so. The swatches are neutral on purpose: their shape is the whole
+     message, and colour is already spoken for by rushing and dragging. */
+  /* The bare number here, where sideName's "the 3" belongs in a sentence. */
+  const side = L => ratio ? ratio[L ? 2 : 1] + " · " : "";
+  const streams = lane
+    ? '<span><i class="sw mk"></i>' + side(0) + 'cross-rhythm</span>' +
+      '<span><i class="sw mk hollow"></i>' + side(1) + 'pulse</span>'
+    : '';
+
   $("l3").innerHTML =
     '<span><i class="sw k-rush"></i>rushes here</span>'+
     '<span><i class="sw k-drag"></i>drags here</span>'+
     (empty ? '<span><i class="sw k-miss"></i>never hit</span>' : '')+
+    streams+
     '<span>pooled across '+rows.length+' session'+(rows.length===1?"":"s")+'</span>';
 }
 
