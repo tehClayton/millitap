@@ -3,18 +3,62 @@
    two subtly different copies. */
 "use strict";
 
+/* aria-label and title carry the same sentence to two different audiences, and
+   a control with one but not the other is either unreadable to a screen reader
+   or unexplained on hover. Setting both in one call is what keeps them in step
+   as the wording changes — and it does change, since several of these say what
+   the control currently IS as well as what it does. */
+function label(el, text){
+  el.setAttribute("aria-label", text);
+  el.title = text;
+  return el;
+}
+
+/* The value, floated clear of the finger covering it.
+
+   Whether to show it is decided from the POINTER THAT IS ACTUALLY DRAGGING,
+   not from what kind of device this is. Device detection cannot answer the
+   question reliably and does not need to: a touchscreen laptop reports touch
+   capability while you use its trackpad, an iPad with a mouse attached reports
+   the opposite, and user-agent sniffing is wrong on anything released after it
+   was written. `pointerType` is per-interaction and exact — touch and pen hide
+   the number behind something, a mouse never does — so that is the test.
+
+   One element for the whole page, created on first use and moved around,
+   because two scrub fields can never be dragged at once. */
+let scrubPop = null;
+function popShow(el, text){
+  if (!scrubPop){
+    scrubPop = document.createElement("div");
+    scrubPop.id = "scrubPop";
+    scrubPop.setAttribute("aria-hidden", "true");   // the field itself announces
+    document.body.appendChild(scrubPop);
+  }
+  scrubPop.textContent = text;
+  const r = el.getBoundingClientRect();
+  scrubPop.style.left = Math.round(r.left + r.width/2) + "px";
+  // Clamped, so a field near the top of the viewport does not push it off.
+  scrubPop.style.top  = Math.max(30, Math.round(r.top - 8)) + "px";
+  scrubPop.classList.add("on");
+}
+function popHide(){ if (scrubPop) scrubPop.classList.remove("on"); }
+
 /* Vertical scrubbing on a numeric field: press and drag, up to raise, down to
    lower, the gesture every DAW uses on a value. f supplies get/set, the bounds,
-   the size of one notch (step), how far you drag for one (px), and an optional
-   commit fired once on release. */
+   the size of one notch (step), how far you drag for one (px), an optional
+   commit fired once on release, and an optional fmt for how the floating
+   readout should word the value. */
 function scrubEl(el, f){
   const apply = v => f.set(Math.max(f.min, Math.min(f.max, v)));
-  let base = 0, y0 = 0, live = false;
+  const say = () => (f.fmt ? f.fmt(f.get()) : String(f.get()));
+  let base = 0, y0 = 0, live = false, pop = false;
 
   el.addEventListener("pointerdown", e => {
     live = true; base = f.get(); y0 = e.clientY;
+    pop = e.pointerType === "touch" || e.pointerType === "pen";
     el.setPointerCapture(e.pointerId);
     el.classList.add("drag");
+    if (pop) popShow(el, say());
     e.preventDefault();
   });
 
@@ -22,12 +66,14 @@ function scrubEl(el, f){
     if (!live) return;
     // Screen y grows downward, so subtracting puts "up" on the positive side.
     apply(base + Math.round((y0 - e.clientY) / f.px) * f.step);
+    if (pop) popShow(el, say());
   });
 
   const end = e => {
     if (!live) return;
     live = false;
     el.classList.remove("drag");
+    if (pop){ popHide(); pop = false; }
     if (el.hasPointerCapture && el.hasPointerCapture(e.pointerId))
       el.releasePointerCapture(e.pointerId);
     if (f.commit) f.commit();

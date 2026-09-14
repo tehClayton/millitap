@@ -34,6 +34,38 @@
     --true:#7FCB8F;
     --miss:#C2566B;
 
+    /* Where the beats fall on the timeline. One tint normally; under a
+       polyrhythm the two streams take their own, so a glance at the chart says
+       which limb a mark belongs to without a legend.
+
+       Deliberately NOT drawn from the four semantic hues above. Those mean
+       rushing, dragging, on-the-beat and missed, and a reference line wearing
+       one of them would claim something about timing it knows nothing about.
+
+       Separation is measured, and took three goes. Two tints of one slate at
+       different opacity came out at OKLab ΔE 3.0 — invisible. Widening that to
+       17.7 cleared the ΔE 15 floor and still read as one colour, because the
+       floor is calibrated for filled marks: a 1px hairline has a fraction of a
+       dot's area and needs far more separation to say the same thing.
+
+       These are ΔE 25.4 apart under normal vision, 23.0 under protan and
+       deutan, 19.9 under tritan — and they differ in hue as well as lightness,
+       so neither channel carries it alone.
+
+       Violet for the cross-rhythm because it is the one region of the wheel
+       none of the four semantic hues occupies; the nearest is ΔE 9.0 away, so
+       a reference line can never be misread as a mark claiming something about
+       timing. A bright neutral was tried for the pulse and rejected for the
+       same reason — it landed ΔE 7.0 from --true under deutan.
+
+       The pulse keeps roughly the faintness the single tick has always had
+       (2.03:1 against the surface) so the familiar chart does not get louder.
+       The cross-rhythm is the one that gains presence at 4.38:1, which is the
+       right way round: it is the layer being learned. Both solid rather than
+       translucent, so what is drawn is exactly what was measured. */
+    --tick-pulse:#485360;
+    --tick-cross:#9670E8;
+
     /* One 4px spacing grid and one type scale, so sizes stop being chosen
        individually. 10 / 11 / 13 / 15 / 19 / 30 / hero. */
     --sp1:4px; --sp2:8px; --sp3:12px; --sp4:16px; --sp5:24px;
@@ -131,6 +163,29 @@
   .tempo .tval, .tempo .tramp{--reach:12px}
   .tval::before, .tramp::before{content:"";position:absolute;left:0;right:0;
     top:calc(0px - var(--reach));bottom:calc(0px - var(--reach))}
+
+  /* The value again, floated clear of the thumb that is covering it. Raised
+     above everything including the modals, since the set editor scrubs too,
+     and inert to pointers so it can never eat the drag it is reporting on.
+     Shown only for touch and pen — ui.js decides that from the pointer doing
+     the dragging, not from what kind of device this is. */
+  #scrubPop{position:fixed;z-index:40;left:0;top:0;
+    transform:translate(-50%,-100%) scale(.92);transform-origin:50% 100%;
+    padding:7px 13px;border-radius:var(--r2);pointer-events:none;
+    background:#0B1116;border:1px solid var(--true);
+    box-shadow:0 10px 26px rgba(0,0,0,.6);
+    font-family:var(--fig);font-size:26px;font-weight:500;line-height:1;
+    font-variant-numeric:tabular-nums;letter-spacing:-.02em;color:var(--true);
+    opacity:0;visibility:hidden;
+    transition:opacity .09s linear, transform .09s ease-out}
+  #scrubPop.on{opacity:1;visibility:visible;transform:translate(-50%,-100%) scale(1)}
+  /* A caret joining the bubble to the field it belongs to, so two fields side
+     by side cannot be confused about which one is being changed. */
+  #scrubPop::after{content:"";position:absolute;left:50%;top:100%;
+    margin-left:-5px;border:5px solid transparent;border-top-color:var(--true)}
+  @media (prefers-reduced-motion:reduce){
+    #scrubPop{transition:none}
+  }
   .tval.drag i{color:var(--ink-dim)}
   .tval:focus-visible{outline:2px solid var(--true);outline-offset:2px}
   /* The live readout is output, not input: no raised face, nothing to grab. */
@@ -274,6 +329,9 @@
     border:1px solid var(--rule);box-shadow:inset 0 1px 0 rgba(255,255,255,.055)}
   .mini.warn{color:var(--miss);border-color:rgba(194,86,107,.4)}
   .mini.go{color:var(--true);border-color:rgba(127,203,143,.45)}
+  /* Loading a drill's settings changes the page behind the panel rather than
+     the row you pressed, so it reads as an action on the app, not on the set. */
+  .mini.load{color:var(--ink);font-size:13px}
   .ct{color:var(--ink-mute);font-family:var(--fig);font-size:11px;margin-left:6px}
 
   .sect{display:grid;gap:var(--sp2);padding:var(--sp3) var(--sp4)}
@@ -353,6 +411,36 @@
   .ptog[aria-pressed="true"] svg{opacity:1}
   .ptog:focus-visible{outline:2px solid var(--true);outline-offset:2px}
 
+  /* The feel button states its own value rather than labelling itself "feel":
+     the band exists so the drill's configuration is legible mid-take, and a
+     control that reads "swing" has already answered the question a control
+     reading "feel" would make you open it to ask. */
+  .feelbtn{display:flex;align-items:center;gap:3px;min-width:62px}
+  .feelbtn .cev{width:11px;height:11px;fill:currentColor;opacity:.5;
+    flex:0 0 auto;margin-right:-2px}
+  /* Lit only when a feel is loaded. Straight is the absence of one, not an
+     eighth option, so it leaves the button looking like every other unset
+     control on the row. */
+  .feelbtn.on{background:var(--true);border-color:var(--true);color:#0C1710}
+  .feelbtn.on .cev{opacity:.7}
+  .feelbtn.live{border-color:var(--ink-mute)}
+  .feelbtn:focus-visible{outline:2px solid var(--true);outline-offset:2px}
+
+  /* One row per feel, with the full name the chips never had room for. */
+  #feelList{display:grid;gap:2px}
+  .feelopt{display:flex;align-items:baseline;gap:var(--sp3);width:100%;
+    padding:9px 10px;border-radius:var(--r1);text-align:left;
+    background:rgba(255,255,255,.022);border:1px solid transparent;
+    color:var(--ink);font-family:inherit;font-size:13px;line-height:1.3}
+  .feelopt .fshort{margin-left:auto;flex:0 0 auto;
+    font-family:var(--fig);font-size:11px;color:var(--ink-mute)}
+  .feelopt.sel{background:rgba(127,203,143,.12);border-color:var(--true)}
+  .feelopt.sel .fshort{color:var(--true)}
+  .feelopt:focus-visible{outline:2px solid var(--true);outline-offset:-2px}
+  /* Straight is what you return to, so it sits apart from the seven rather
+     than reading as one of them. */
+  .feelopt.none{margin-bottom:var(--sp2)}
+
   /* Cells divide the width rather than wrapping. Sixteenths in 7/8 is 28 of
      them; wrapping made the block's height depend on the meter, and one bar
      should read as one row whatever it contains. */
@@ -429,6 +517,19 @@
     background:var(--true);color:#0C1710;padding:11px 17px;border-radius:var(--r1);
     font-size:13px;font-weight:600;display:none;z-index:30;
     box-shadow:0 10px 28px rgba(0,0,0,.5)}
+
+  /* Its own element rather than a second use of #toast: that one is the service
+     worker's update prompt and carries a click-to-reload handler, and a
+     confirmation that reloaded the page would be a poor confirmation. */
+  #msg{position:fixed;left:50%;transform:translateX(-50%) translateY(6px);
+    bottom:calc(var(--sp4) + env(safe-area-inset-bottom));
+    background:var(--panel-hi);color:var(--ink);border:1px solid var(--rule);
+    padding:9px 15px;border-radius:var(--r1);font-size:12px;z-index:29;
+    box-shadow:0 10px 28px rgba(0,0,0,.5);pointer-events:none;
+    opacity:0;visibility:hidden;
+    transition:opacity .14s linear, transform .14s ease-out}
+  #msg.on{opacity:1;visibility:visible;transform:translateX(-50%) translateY(0)}
+  @media (prefers-reduced-motion:reduce){ #msg{transition:none} }
 </style>
 </head>
 <body>
@@ -446,14 +547,16 @@
     <h1>millitap</h1>
   </span>
   <span class="navs">
-  <a class="histlink" href="history.html" aria-label="Practice history">
+  <a class="histlink" href="history.html" aria-label="Practice history"
+     title="Practice history — charts of how your timing is tracking">
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <rect x="3" y="13" width="4.6" height="8" rx="1.2"/>
       <rect x="9.7" y="6.5" width="4.6" height="14.5" rx="1.2"/>
       <rect x="16.4" y="10" width="4.6" height="11" rx="1.2"/>
     </svg>
   </a>
-    <button id="gear" class="navbtn" aria-label="Settings" aria-expanded="false">
+    <button id="gear" class="navbtn" aria-label="Settings" aria-expanded="false"
+      title="Settings — pads, count-in, audio offset">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a7.07 7.07 0 0 0 .06-.94 7.07 7.07 0 0 0-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.12.22.38.3.6.22l2.39-.96c.49.38 1.03.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.48 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
     </button>
   </span>
@@ -465,7 +568,8 @@
          sit alongside meter, note value and feel — it stands in for all three,
          in the same space, and the toggle is what swaps them. -->
     <button class="chip ptog" type="button" id="polyTog"
-      aria-pressed="false" aria-label="Polyrhythm">
+      aria-pressed="false" aria-label="Polyrhythm"
+      title="Polyrhythm — play two streams at once, one per hand">
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <circle cx="4" cy="8" r="2"/><circle cx="12" cy="8" r="2"/><circle cx="20" cy="8" r="2"/>
         <circle cx="4" cy="16" r="2"/><circle cx="9.33" cy="16" r="2"/>
@@ -474,12 +578,23 @@
     </button>
     <div class="pick" id="meterPick"></div>
     <div class="pick" id="notePick"></div>
-    <div class="pick" id="feelPick"></div>
+    <!-- Seven feels were seven chips competing with everything else on the one
+         row this band is allowed. One button, naming whichever is loaded, says
+         the same thing in a seventh of the width — and the modal it opens has
+         room for the full names, which until now only existed in aria-label. -->
+    <button class="chip sm feelbtn" type="button" id="feelBtn"
+      aria-haspopup="dialog" aria-expanded="false">
+      <span id="feelNow">straight</span>
+      <svg class="cev" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M7 10l5 5 5-5z"/>
+      </svg>
+    </button>
     <div class="pick" id="polyPick" hidden></div>
     <div class="grid" id="clickGrid"></div>
     <div class="bars" id="barGrid"></div>
     <button class="chip fig phlen" type="button" id="phraseLen"
-      aria-label="Phrase length in bars">4</button>
+      aria-label="Phrase length in bars"
+      title="Phrase length — how many bars before the pattern repeats">4</button>
   </div>
 </div>
 
@@ -491,15 +606,18 @@
 </div>
 
 <div class="transport">
-  <button id="run" class="iconbtn" aria-label="Start">
+  <button id="run" class="iconbtn" aria-label="Start"
+    title="Play or stop">
     <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
     <svg class="i-stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
   </button>
   <div class="tempo">
     <div class="tvals">
       <button class="tval" id="tFrom" type="button" role="spinbutton"
-        aria-label="Tempo" aria-valuemin="30" aria-valuemax="220" aria-valuenow="84"><b>84</b><i>bpm</i></button>
-      <button class="tramp" id="tRamp" type="button" aria-pressed="false" aria-label="Tempo ramp">
+        aria-label="Tempo" aria-valuemin="30" aria-valuemax="220" aria-valuenow="84"
+    title="Tempo — drag up or down to change"><b>84</b><i>bpm</i></button>
+      <button class="tramp" id="tRamp" type="button" aria-pressed="false" aria-label="Tempo ramp"
+    title="Tempo ramp — sweep from one tempo to another over a set time">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path class="r-flat" d="M3 12h18"/>
           <path class="r-rise" d="M3 18L21 6"/>
@@ -507,14 +625,17 @@
         <i>ramp</i>
       </button>
       <button class="tval" id="tTo" type="button" hidden role="spinbutton"
-        aria-label="Ramp target tempo" aria-valuemin="30" aria-valuemax="220" aria-valuenow="120"><b>120</b><i>to</i></button>
+        aria-label="Ramp target tempo" aria-valuemin="30" aria-valuemax="220" aria-valuenow="120"
+    title="Ramp target — the tempo the sweep ends at"><b>120</b><i>to</i></button>
       <button class="tval" id="tSecs" type="button" hidden role="spinbutton"
-        aria-label="Ramp duration in seconds" aria-valuemin="5" aria-valuemax="600" aria-valuenow="30"><b>30</b><i>sec</i></button>
+        aria-label="Ramp duration in seconds" aria-valuemin="5" aria-valuemax="600" aria-valuenow="30"
+    title="Ramp duration — how long the sweep takes"><b>30</b><i>sec</i></button>
       <span class="tval live" id="tNow" hidden><b>—</b><i>now</i></span>
     </div>
   </div>
   <button class="iconbtn" id="setsBtn" type="button" aria-label="Drill sets"
-    aria-expanded="false">
+    aria-expanded="false"
+    title="Sets — build a playlist of drills, or run one">
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M3 5h13v2H3zM3 10h13v2H3zM3 15h8v2H3z"/>
       <path d="M17.4 13.6v2.9h-2.9v2h2.9v2.9h2v-2.9h2.9v-2h-2.9v-2.9z"/>
@@ -524,6 +645,13 @@
 </div>
 
 <div id="scrim" hidden></div>
+
+<div id="feelModal" class="settings" hidden>
+  <div class="sect">
+    <h2>Feel <span class="hint">how the notes sit against the beat</span></h2>
+    <div id="feelList"></div>
+  </div>
+</div>
 
 <div id="setsModal" class="settings" hidden>
   <div class="sect">
@@ -539,8 +667,10 @@
   <div class="sect">
     <h2>Backup <span class="hint">sessions and sets, one file</span></h2>
     <div class="pick">
-      <button type="button" id="expBtn">Export all data</button>
-      <button type="button" id="impBtn">Import backup</button>
+      <button type="button" id="expBtn"
+        title="Download every session and set as one JSON file">Export all data</button>
+      <button type="button" id="impBtn"
+        title="Merge a backup file into this device — nothing is overwritten">Import backup</button>
       <input type="file" id="impFile" accept="application/json,.json" hidden>
     </div>
   </div>
@@ -572,7 +702,8 @@
   </div>
 
   <div class="sect">
-    <button type="button" id="advToggle" class="advbtn" aria-expanded="false">
+    <button type="button" id="advToggle" class="advbtn" aria-expanded="false"
+      title="Audio offset and diagnostics">
       <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7z"/></svg>
       Advanced
     </button>
@@ -624,6 +755,7 @@
 
 <div id="lastPop" aria-hidden="true"></div>
 <div id="flash" hidden></div>
+<div id="msg" role="status" aria-live="polite"></div>
 <div id="toast">Updated — tap to reload</div>
 
 <script src="store.js"></script>
@@ -1126,11 +1258,17 @@ function draw(ts){
 
   if (running){
     const lat=latency();
-    g2.strokeStyle="rgba(138,155,175,.16)";
+    /* Resolved once rather than per tick: css() reads computed style, and this
+       loop runs over every target in the window on every frame. */
+    const plain = "rgba(138,155,175,.16)";
+    const tickP = cfg.poly ? css("--tick-pulse") : plain;
+    const tickX = cfg.poly ? css("--tick-cross") : plain;
     for (const t of targets){
       const age = now - (t.t+lat);
       if (age<0 || age>HISTORY) continue;
       const x = sx + sw - (age/HISTORY)*sw;
+      // lane is null outside a polyrhythm, so both branches land on the same tint.
+      g2.strokeStyle = t.lane === 0 ? tickX : tickP;
       g2.beginPath(); g2.moveTo(x+.5, pad*0.5); g2.lineTo(x+.5, H-pad*0.5); g2.stroke();
     }
   }
@@ -1279,8 +1417,7 @@ function buildPads(){
       tag.className="lane";
       tag.textContent = L ? cfg.poly.y : cfg.poly.x;
       el.appendChild(tag);
-      el.setAttribute("aria-label",
-        "pad "+(i+1)+", playing the "+(L ? cfg.poly.y : cfg.poly.x));
+      label(el, "pad "+(i+1)+", playing the "+(L ? cfg.poly.y : cfg.poly.x));
     }
     el.addEventListener("pointerdown", e => {
       e.preventDefault();
@@ -1298,7 +1435,7 @@ function buildPads(){
 
 addEventListener("keydown", e => {
   if (e.repeat) return;
-  if (e.key==="Escape"){ setSettings(false); showSets(false); return; }
+  if (e.key==="Escape"){ setSettings(false); showSets(false); showFeel(false); return; }
   if (e.code==="Space"){ e.preventDefault(); toggle(); return; }
   const n = parseInt(e.key,10);
   if (n>=1 && n<=cfg.pads && ctx){ e.preventDefault(); tap(n-1, e.timeStamp); }
@@ -1330,7 +1467,7 @@ function start(){
                                    : -inBeats*gridSub();
 
   running=true;
-  $("run").classList.add("on"); $("run").setAttribute("aria-label","Stop");
+  $("run").classList.add("on"); label($("run"), "Stop");
   schedule();
   schedTimer = setInterval(schedule, TICK);
 }
@@ -1338,7 +1475,7 @@ function start(){
 function stop(){
   running=false; clearInterval(schedTimer);
   captureSession();
-  $("run").classList.remove("on"); $("run").setAttribute("aria-label","Start");
+  $("run").classList.remove("on"); label($("run"), "Start");
 }
 
 /* A session is whatever was played since the last capture. Tracking a committed
@@ -1463,27 +1600,19 @@ function renderPickers(){
   for (const n of NOTES){
     const b=chip("glyph", !cfg.feel && cfg.note===n);
     b.innerHTML=NOTE_SVG[n.id];
-    b.setAttribute("aria-label", n.name);
+    label(b, n.name);
     b.title=n.name;
     b.onclick=()=>{ cfg.note=n; cfg.feel=null; rebuild(); };
     np.appendChild(b);
   }
 
-  const fp=$("feelPick"); fp.innerHTML="";
-  for (const f of FEELS){
-    const b=chip("sm", cfg.feel===f);
-    b.textContent=f.short;
-    // The full name only exists in the label; a screen reader should get it.
-    b.setAttribute("aria-label", f.name);
-    b.onclick=()=>{ cfg.feel = cfg.feel===f ? null : f; rebuild(); };
-    fp.appendChild(b);
-  }
+  renderFeelBtn();
 
   const yp=$("polyPick"); yp.innerHTML="";
   for (const p of POLYS){
     const b=chip("fig", poly && polyId(cfg.poly)===polyId(p));
     b.textContent=polyId(p);
-    b.setAttribute("aria-label", p.x+" against "+p.y);
+    label(b, p.x+" against "+p.y);
     b.onclick=()=>{ cfg.poly = p; rebuild(); };
     yp.appendChild(b);
   }
@@ -1493,7 +1622,7 @@ function renderPickers(){
      which is the constraint the whole band was built around. */
   $("meterPick").hidden = poly;
   $("notePick").hidden  = poly;
-  $("feelPick").hidden  = poly;
+  $("feelBtn").hidden   = poly;
   $("polyPick").hidden  = !poly;
   $("polyTog").setAttribute("aria-pressed", String(poly));
 
@@ -1501,7 +1630,7 @@ function renderPickers(){
   for (let n=1;n<=8;n++){
     const b=chip("fig", cfg.pads===n);
     b.textContent=String(n);
-    b.setAttribute("aria-label", n===1 ? "1 pad" : n+" pads");
+    label(b, n===1 ? "1 pad" : n+" pads");
     b.onclick=()=>{
       cfg.pads=n; resetLanes(); buildPads(); renderPickers();
       if (running){ stop(); start(); }
@@ -1514,7 +1643,7 @@ function renderPickers(){
   for (const [v,lab] of [["any","any pad"],["alt","alternating"]]){
     const b=chip("sm", cfg.padMode===v);
     b.textContent=lab;
-    b.setAttribute("aria-label", v==="any"
+    label(b, v==="any"
       ? "any pad counts for any note" : "pads alternate across the notes");
     b.onclick=()=>{
       cfg.padMode=v; renderPickers();
@@ -1535,8 +1664,7 @@ function renderPickers(){
       const b=chip("fig", false);
       const L = laneOf(i);
       b.textContent = (i+1) + " → " + (L ? cfg.poly.y : cfg.poly.x);
-      b.setAttribute("aria-label",
-        "pad "+(i+1)+" plays the "+(L ? cfg.poly.y : cfg.poly.x)+", tap to swap");
+      label(b, "pad "+(i+1)+" plays the "+(L ? cfg.poly.y : cfg.poly.x)+", tap to swap");
       b.onclick=()=>{
         cfg.padLanes[i] = L ? 0 : 1;
         buildPads(); renderPickers();
@@ -1551,7 +1679,7 @@ function renderPickers(){
   for (const [v,lab] of [[0,"off"],[1,"1"],[2,"2"]]){
     const b=chip("fig", cfg.countIn===v);
     b.textContent=lab;
-    b.setAttribute("aria-label", v ? v+" bar count-in" : "no count-in");
+    label(b, v ? v+" bar count-in" : "no count-in");
     b.onclick=()=>{ cfg.countIn=v; renderPickers(); };
     cp.appendChild(b);
   }
@@ -1570,7 +1698,7 @@ function renderBars(){
     const b=document.createElement("button");
     b.type="button";
     b.className="bcell"+(on?" on":"");
-    b.setAttribute("aria-label", "bar "+(i+1)+" of "+cfg.bars.length+": "+
+    label(b, "bar "+(i+1)+" of "+cfg.bars.length+": "+
       (on ? "click sounds" : "silent"));
     b.onclick=()=>{ cfg.bars[i]=cfg.bars[i]?0:1; renderBars(); };
     host.appendChild(b);
@@ -1635,8 +1763,7 @@ function renderPolyGrid(){
       const b=document.createElement("button");
       b.type="button";
       b.className="cell l"+L+" s"+state+(i?"":" beat");
-      b.setAttribute("aria-label",
-        (L ? "pulse" : "cross-rhythm")+" note "+(i+1)+": "+CELL_NAMES[state]);
+      label(b, (L ? "pulse" : "cross-rhythm")+" note "+(i+1)+": "+CELL_NAMES[state]);
       b.onclick=()=>{
         cfg.polyClick[L][i]=(cfg.polyClick[L][i]+1)%3;
         renderGrid();
@@ -1660,8 +1787,7 @@ function renderGrid(){
     b.type="button";
     b.className="cell s"+state+(beat?" beat":"");
     if (beat) b.dataset.n = String(Math.floor(i/sub)+1);
-    b.setAttribute("aria-label",
-      "beat "+(Math.floor(i/sub)+1)+(beat?"":" +"+(i%sub))+": "+names[state]);
+    label(b, "beat "+(Math.floor(i/sub)+1)+(beat?"":" +"+(i%sub))+": "+names[state]);
     b.onclick=()=>{ cfg.click[i]=(cfg.click[i]+1)%3; renderGrid(); };
     host.appendChild(b);
     gridEls.push(b);
@@ -1736,10 +1862,17 @@ $("polyTog").onclick = () => {
    the gesture every DAW uses on a value field. px is how far you drag for one
    notch, so the seconds field moves five at a time over a range twelve times
    wider than the tempo without feeling twelve times slower. */
+/* fmt is what the floating readout says while a thumb is over the field. The
+   field's own unit label sits under the number and is covered along with it,
+   so the bubble has to carry the unit or it would report a bare 45 for both a
+   tempo and a duration. */
 const TF = {
-  tFrom: { get:()=>cfg.bpm,       set:v=>cfg.bpm=v,       min:30, max:220, step:1, px:3 },
-  tTo:   { get:()=>cfg.ramp.to,   set:v=>cfg.ramp.to=v,   min:30, max:220, step:1, px:3 },
-  tSecs: { get:()=>cfg.ramp.secs, set:v=>cfg.ramp.secs=v, min:5,  max:600, step:5, px:3 }
+  tFrom: { get:()=>cfg.bpm,       set:v=>cfg.bpm=v,       min:30, max:220, step:1, px:3,
+           fmt:v=>v+" bpm" },
+  tTo:   { get:()=>cfg.ramp.to,   set:v=>cfg.ramp.to=v,   min:30, max:220, step:1, px:3,
+           fmt:v=>v+" bpm" },
+  tSecs: { get:()=>cfg.ramp.secs, set:v=>cfg.ramp.secs=v, min:5,  max:600, step:5, px:3,
+           fmt:v=>mmss(v) }
 };
 
 function setField(id, v){
@@ -1904,8 +2037,12 @@ const saveSet = t => Store.putSet(t);
 function renderRun(){
   const chip = $("runChip"), on = !!runSet && runIdx >= 0;
   chip.hidden = !on;
-  if (on) chip.innerHTML = runSet.name +
-    ' <span class="rn">' + (runIdx + 1) + '/' + runSet.drills.length + '</span>';
+  if (on){
+    chip.innerHTML = runSet.name +
+      ' <span class="rn">' + (runIdx + 1) + '/' + runSet.drills.length + '</span>';
+    label(chip, "Running " + runSet.name + ", drill " + (runIdx + 1) +
+                " of " + runSet.drills.length);
+  }
 }
 
 function playSet(t){
@@ -1937,11 +2074,26 @@ function newSet(){
   return t;
 }
 
-function mini(text, label, fn, cls){
+/* A brief confirmation for something that happened behind a panel that has
+   since closed. role=status, so it is announced without stealing focus. */
+let msgT = null;
+function toast(text){
+  const m = $("msg");
+  m.textContent = text;
+  m.classList.add("on");
+  clearTimeout(msgT);
+  msgT = setTimeout(() => m.classList.remove("on"), 1900);
+}
+
+/* `why`, not `label` — the parameter used to be called that and now shadows the
+   helper it needs to call. These buttons are a glyph and nothing else, so this
+   string is the only place their purpose is written down: for a screen reader
+   before, and for a hover as well now. */
+function mini(text, why, fn, cls){
   const b = document.createElement("button");
   b.type = "button"; b.className = "mini" + (cls ? " " + cls : "");
   b.textContent = text;
-  if (label) b.setAttribute("aria-label", label);
+  if (why) label(b, why);
   b.onclick = fn;
   return b;
 }
@@ -1968,7 +2120,7 @@ function renderSteps(t, host){
     const len = document.createElement("button");
     len.type = "button"; len.className = "tval slen";
     len.setAttribute("role", "spinbutton");
-    len.setAttribute("aria-label", "Drill " + (i+1) + " length in " + st.len.u);
+    label(len, "Drill " + (i+1) + " length in " + st.len.u);
     len.setAttribute("aria-valuenow", st.len.n);
     // The unit lives on the toggle beside it, which both shows and changes it.
     len.innerHTML = "<b>" + st.len.n + "</b>";
@@ -1979,6 +2131,9 @@ function renderSteps(t, host){
                   len.setAttribute("aria-valuenow", v);
                   sub.textContent = dur(); },
       min: secs ? 5 : 1, max: secs ? 1800 : 64, step: secs ? 5 : 1, px: 3,
+      // The unit is on the toggle beside the field, not under the number, so
+      // the bubble spells it out rather than floating a bare count.
+      fmt: v => secs ? mmss(v) : v + (v === 1 ? " bar" : " bars"),
       commit: () => { saveSet(t); renderSetModal(); }
     });
 
@@ -1994,6 +2149,19 @@ function renderSteps(t, host){
       st.len.n = secs ? 8 : 60;      // a sane default in the unit you switched to
       saveSet(t); renderSetModal();
     }, "unit"));
+    /* Lifts a drill's configuration back out of the set and onto the page,
+       without starting the set. Sets were the only place some configurations
+       existed once they had been captured, so the only way back to one was to
+       rebuild it by hand or run the whole set to reach it. */
+    ctl.appendChild(mini("⤒", "Load this drill's settings", () => {
+      /* Stop first: applyDrill rebuilds the pattern, and a running scheduler
+         has already queued a lookahead's worth of the old one. */
+      if (running){ stop(); runSet = null; runIdx = -1; renderRun(); }
+      applyDrill(st);
+      clearAll();          // the count belonged to whatever was configured before
+      showSets(false);
+      toast("Loaded " + (st.label || "drill " + (i+1)));
+    }, "load"));
     ctl.appendChild(mini("↑", "Move drill up", () => {
       if (i > 0){ const p = t.drills[i-1]; t.drills[i-1] = t.drills[i]; t.drills[i] = p;
                   saveSet(t); renderSetModal(); }
@@ -2021,7 +2189,7 @@ function renderSetModal(){
   for (const t of list){
     const b = chip("sm", false);
     b.innerHTML = t.name + '<span class="ct">' + t.drills.length + '</span>';
-    b.setAttribute("aria-label", "Add this drill to " + t.name);
+    label(b, "Add this drill to " + t.name);
     b.onclick = () => addToSet(t);
     ap.appendChild(b);
   }
@@ -2081,22 +2249,89 @@ function renderSetModal(){
   }
 }
 
+/* The scrim belongs to whichever overlays are open, not to the last one that
+   changed. Each panel asking "is anyone else still up?" was one panel away
+   from getting it wrong, and three is past where that holds. */
+const OVERLAYS = ["settings", "setsModal", "feelModal"];
+function syncScrim(){
+  $("scrim").hidden = OVERLAYS.every(id => $(id).hidden);
+}
+
+/* Pinned under the row that opens it, measured rather than hard-coded, so the
+   panel follows the strip however the row above it happens to wrap. */
+function dropUnder(m, sel){
+  const r = document.querySelector(sel).getBoundingClientRect();
+  m.style.top = Math.round(r.bottom + 8) + "px";
+  m.style.maxHeight = "calc(100vh - " + Math.round(r.bottom + 22) + "px)";
+}
+
 function showSets(open){
   const m = $("setsModal");
   if (open){
-    setSettings(false);
-    const r = document.querySelector(".transport").getBoundingClientRect();
-    m.style.top = Math.round(r.bottom + 8) + "px";
-    m.style.maxHeight = "calc(100vh - " + Math.round(r.bottom + 22) + "px)";
+    /* Safe mutual calls: each panel only clears the others while opening, so
+       the chain is one level deep in every direction. */
+    setSettings(false); showFeel(false);
+    dropUnder(m, ".transport");
     renderSetModal();
   }
   m.hidden = !open;
-  $("scrim").hidden = !open && $("settings").hidden;
+  syncScrim();
   $("setsBtn").classList.toggle("live", open);
   $("setsBtn").setAttribute("aria-expanded", String(open));
 }
 
 $("setsBtn").onclick = () => showSets($("setsModal").hidden);
+
+/* ------------------------------------------------------------------- feel */
+function renderFeelBtn(){
+  const on = !!cfg.feel;
+  $("feelNow").textContent = on ? cfg.feel.short : "straight";
+  $("feelBtn").classList.toggle("on", on);
+  label($("feelBtn"), "Feel: " + (on ? cfg.feel.name : "straight") + ". Choose a feel");
+}
+
+function renderFeelList(){
+  const host = $("feelList"); host.innerHTML = "";
+
+  const row = (name, short, sel, pick, extra) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "feelopt" + (sel ? " sel" : "") + (extra ? " " + extra : "");
+    b.setAttribute("aria-pressed", String(sel));
+    const n = document.createElement("span");
+    n.className = "fname"; n.textContent = name;
+    b.appendChild(n);
+    if (short){
+      const s = document.createElement("span");
+      s.className = "fshort"; s.textContent = short;
+      b.appendChild(s);
+    }
+    b.onclick = () => { pick(); showFeel(false); rebuild(); };
+    host.appendChild(b);
+  };
+
+  /* Clearing the feel is an option in the list rather than a second press on
+     the one already chosen. The chips toggled, which meant the way back out
+     was invisible unless you already knew it was there. */
+  row("Straight", null, !cfg.feel, () => { cfg.feel = null; }, "none");
+  for (const f of FEELS)
+    row(f.name, f.short, cfg.feel === f, () => { cfg.feel = f; });
+}
+
+function showFeel(open){
+  const m = $("feelModal");
+  if (open){
+    setSettings(false); showSets(false);
+    dropUnder(m, ".pattern");
+    renderFeelList();
+  }
+  m.hidden = !open;
+  syncScrim();
+  $("feelBtn").classList.toggle("live", open);
+  $("feelBtn").setAttribute("aria-expanded", String(open));
+}
+
+$("feelBtn").onclick = () => showFeel($("feelModal").hidden);
 
 /* ------------------------------------------------------------------ backup */
 function download(name, text, type){
@@ -2160,18 +2395,21 @@ $("run").onclick = toggle;
 function setSettings(open){
   const s=$("settings");
   if (open){
-    const r = document.querySelector(".transport").getBoundingClientRect();
-    s.style.top = Math.round(r.bottom + 8) + "px";
-    s.style.maxHeight = "calc(100vh - " + Math.round(r.bottom + 22) + "px)";
+    /* Closing the siblings belongs here, not in the gear's click handler.
+       While it lived there, every other way of opening settings left another
+       panel up behind it — and each new panel made one more caller responsible
+       for remembering. All three now clear the others on the way up. */
+    showSets(false); showFeel(false);
+    dropUnder(s, ".transport");
   }
   s.hidden = !open;
-  $("scrim").hidden = !open;
+  syncScrim();
   $("gear").classList.toggle("on", open);
   $("gear").setAttribute("aria-expanded", String(open));
 }
 
-$("gear").onclick  = () => { showSets(false); setSettings($("settings").hidden); };
-$("scrim").onclick = () => { setSettings(false); showSets(false); };
+$("gear").onclick  = () => setSettings($("settings").hidden);
+$("scrim").onclick = () => { setSettings(false); showSets(false); showFeel(false); };
 
 /* Deliberately stall the main thread, to test whether touch timestamps
    survive it. Interval is prime-ish so it never locks to the beat. */
