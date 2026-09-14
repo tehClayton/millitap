@@ -34,6 +34,7 @@
     --true:#7FCB8F;
     --miss:#C2566B;
 
+
     /* One 4px spacing grid and one type scale, so sizes stop being chosen
        individually. 10 / 11 / 13 / 15 / 19 / 30 / hero. */
     --sp1:4px; --sp2:8px; --sp3:12px; --sp4:16px; --sp5:24px;
@@ -515,14 +516,16 @@
     <h1>millitap</h1>
   </span>
   <span class="navs">
-  <a class="histlink" href="history.html" aria-label="Practice history">
+  <a class="histlink" href="history.html" aria-label="Practice history"
+     title="Practice history — charts of how your timing is tracking">
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <rect x="3" y="13" width="4.6" height="8" rx="1.2"/>
       <rect x="9.7" y="6.5" width="4.6" height="14.5" rx="1.2"/>
       <rect x="16.4" y="10" width="4.6" height="11" rx="1.2"/>
     </svg>
   </a>
-    <button id="gear" class="navbtn" aria-label="Settings" aria-expanded="false">
+    <button id="gear" class="navbtn" aria-label="Settings" aria-expanded="false"
+      title="Settings — pads, count-in, audio offset">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a7.07 7.07 0 0 0 .06-.94 7.07 7.07 0 0 0-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.12.22.38.3.6.22l2.39-.96c.49.38 1.03.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.48 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
     </button>
   </span>
@@ -534,7 +537,8 @@
          sit alongside meter, note value and feel — it stands in for all three,
          in the same space, and the toggle is what swaps them. -->
     <button class="chip ptog" type="button" id="polyTog"
-      aria-pressed="false" aria-label="Polyrhythm">
+      aria-pressed="false" aria-label="Polyrhythm"
+      title="Polyrhythm — play two streams at once, one per hand">
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <circle cx="4" cy="8" r="2"/><circle cx="12" cy="8" r="2"/><circle cx="20" cy="8" r="2"/>
         <circle cx="4" cy="16" r="2"/><circle cx="9.33" cy="16" r="2"/>
@@ -558,7 +562,8 @@
     <div class="grid" id="clickGrid"></div>
     <div class="bars" id="barGrid"></div>
     <button class="chip fig phlen" type="button" id="phraseLen"
-      aria-label="Phrase length in bars">4</button>
+      aria-label="Phrase length in bars"
+      title="Phrase length — how many bars before the pattern repeats">4</button>
   </div>
 </div>
 
@@ -570,15 +575,18 @@
 </div>
 
 <div class="transport">
-  <button id="run" class="iconbtn" aria-label="Start">
+  <button id="run" class="iconbtn" aria-label="Start"
+    title="Play or stop">
     <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
     <svg class="i-stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
   </button>
   <div class="tempo">
     <div class="tvals">
       <button class="tval" id="tFrom" type="button" role="spinbutton"
-        aria-label="Tempo" aria-valuemin="30" aria-valuemax="220" aria-valuenow="84"><b>84</b><i>bpm</i></button>
-      <button class="tramp" id="tRamp" type="button" aria-pressed="false" aria-label="Tempo ramp">
+        aria-label="Tempo" aria-valuemin="30" aria-valuemax="220" aria-valuenow="84"
+    title="Tempo — drag up or down to change"><b>84</b><i>bpm</i></button>
+      <button class="tramp" id="tRamp" type="button" aria-pressed="false" aria-label="Tempo ramp"
+    title="Tempo ramp — sweep from one tempo to another over a set time">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path class="r-flat" d="M3 12h18"/>
           <path class="r-rise" d="M3 18L21 6"/>
@@ -586,14 +594,17 @@
         <i>ramp</i>
       </button>
       <button class="tval" id="tTo" type="button" hidden role="spinbutton"
-        aria-label="Ramp target tempo" aria-valuemin="30" aria-valuemax="220" aria-valuenow="120"><b>120</b><i>to</i></button>
+        aria-label="Ramp target tempo" aria-valuemin="30" aria-valuemax="220" aria-valuenow="120"
+    title="Ramp target — the tempo the sweep ends at"><b>120</b><i>to</i></button>
       <button class="tval" id="tSecs" type="button" hidden role="spinbutton"
-        aria-label="Ramp duration in seconds" aria-valuemin="5" aria-valuemax="600" aria-valuenow="30"><b>30</b><i>sec</i></button>
+        aria-label="Ramp duration in seconds" aria-valuemin="5" aria-valuemax="600" aria-valuenow="30"
+    title="Ramp duration — how long the sweep takes"><b>30</b><i>sec</i></button>
       <span class="tval live" id="tNow" hidden><b>—</b><i>now</i></span>
     </div>
   </div>
   <button class="iconbtn" id="setsBtn" type="button" aria-label="Drill sets"
-    aria-expanded="false">
+    aria-expanded="false"
+    title="Sets — build a playlist of drills, or run one">
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M3 5h13v2H3zM3 10h13v2H3zM3 15h8v2H3z"/>
       <path d="M17.4 13.6v2.9h-2.9v2h2.9v2.9h2v-2.9h2.9v-2h-2.9v-2.9z"/>
@@ -625,8 +636,10 @@
   <div class="sect">
     <h2>Backup <span class="hint">sessions and sets, one file</span></h2>
     <div class="pick">
-      <button type="button" id="expBtn">Export all data</button>
-      <button type="button" id="impBtn">Import backup</button>
+      <button type="button" id="expBtn"
+        title="Download every session and set as one JSON file">Export all data</button>
+      <button type="button" id="impBtn"
+        title="Merge a backup file into this device — nothing is overwritten">Import backup</button>
       <input type="file" id="impFile" accept="application/json,.json" hidden>
     </div>
   </div>
@@ -658,7 +671,8 @@
   </div>
 
   <div class="sect">
-    <button type="button" id="advToggle" class="advbtn" aria-expanded="false">
+    <button type="button" id="advToggle" class="advbtn" aria-expanded="false"
+      title="Audio offset and diagnostics">
       <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7z"/></svg>
       Advanced
     </button>
@@ -1366,8 +1380,7 @@ function buildPads(){
       tag.className="lane";
       tag.textContent = L ? cfg.poly.y : cfg.poly.x;
       el.appendChild(tag);
-      el.setAttribute("aria-label",
-        "pad "+(i+1)+", playing the "+(L ? cfg.poly.y : cfg.poly.x));
+      label(el, "pad "+(i+1)+", playing the "+(L ? cfg.poly.y : cfg.poly.x));
     }
     el.addEventListener("pointerdown", e => {
       e.preventDefault();
@@ -1417,7 +1430,7 @@ function start(){
                                    : -inBeats*gridSub();
 
   running=true;
-  $("run").classList.add("on"); $("run").setAttribute("aria-label","Stop");
+  $("run").classList.add("on"); label($("run"), "Stop");
   schedule();
   schedTimer = setInterval(schedule, TICK);
 }
@@ -1425,7 +1438,7 @@ function start(){
 function stop(){
   running=false; clearInterval(schedTimer);
   captureSession();
-  $("run").classList.remove("on"); $("run").setAttribute("aria-label","Start");
+  $("run").classList.remove("on"); label($("run"), "Start");
 }
 
 /* A session is whatever was played since the last capture. Tracking a committed
@@ -1550,7 +1563,7 @@ function renderPickers(){
   for (const n of NOTES){
     const b=chip("glyph", !cfg.feel && cfg.note===n);
     b.innerHTML=NOTE_SVG[n.id];
-    b.setAttribute("aria-label", n.name);
+    label(b, n.name);
     b.title=n.name;
     b.onclick=()=>{ cfg.note=n; cfg.feel=null; rebuild(); };
     np.appendChild(b);
@@ -1562,7 +1575,7 @@ function renderPickers(){
   for (const p of POLYS){
     const b=chip("fig", poly && polyId(cfg.poly)===polyId(p));
     b.textContent=polyId(p);
-    b.setAttribute("aria-label", p.x+" against "+p.y);
+    label(b, p.x+" against "+p.y);
     b.onclick=()=>{ cfg.poly = p; rebuild(); };
     yp.appendChild(b);
   }
@@ -1580,7 +1593,7 @@ function renderPickers(){
   for (let n=1;n<=8;n++){
     const b=chip("fig", cfg.pads===n);
     b.textContent=String(n);
-    b.setAttribute("aria-label", n===1 ? "1 pad" : n+" pads");
+    label(b, n===1 ? "1 pad" : n+" pads");
     b.onclick=()=>{
       cfg.pads=n; resetLanes(); buildPads(); renderPickers();
       if (running){ stop(); start(); }
@@ -1593,7 +1606,7 @@ function renderPickers(){
   for (const [v,lab] of [["any","any pad"],["alt","alternating"]]){
     const b=chip("sm", cfg.padMode===v);
     b.textContent=lab;
-    b.setAttribute("aria-label", v==="any"
+    label(b, v==="any"
       ? "any pad counts for any note" : "pads alternate across the notes");
     b.onclick=()=>{
       cfg.padMode=v; renderPickers();
@@ -1614,8 +1627,7 @@ function renderPickers(){
       const b=chip("fig", false);
       const L = laneOf(i);
       b.textContent = (i+1) + " → " + (L ? cfg.poly.y : cfg.poly.x);
-      b.setAttribute("aria-label",
-        "pad "+(i+1)+" plays the "+(L ? cfg.poly.y : cfg.poly.x)+", tap to swap");
+      label(b, "pad "+(i+1)+" plays the "+(L ? cfg.poly.y : cfg.poly.x)+", tap to swap");
       b.onclick=()=>{
         cfg.padLanes[i] = L ? 0 : 1;
         buildPads(); renderPickers();
@@ -1630,7 +1642,7 @@ function renderPickers(){
   for (const [v,lab] of [[0,"off"],[1,"1"],[2,"2"]]){
     const b=chip("fig", cfg.countIn===v);
     b.textContent=lab;
-    b.setAttribute("aria-label", v ? v+" bar count-in" : "no count-in");
+    label(b, v ? v+" bar count-in" : "no count-in");
     b.onclick=()=>{ cfg.countIn=v; renderPickers(); };
     cp.appendChild(b);
   }
@@ -1649,7 +1661,7 @@ function renderBars(){
     const b=document.createElement("button");
     b.type="button";
     b.className="bcell"+(on?" on":"");
-    b.setAttribute("aria-label", "bar "+(i+1)+" of "+cfg.bars.length+": "+
+    label(b, "bar "+(i+1)+" of "+cfg.bars.length+": "+
       (on ? "click sounds" : "silent"));
     b.onclick=()=>{ cfg.bars[i]=cfg.bars[i]?0:1; renderBars(); };
     host.appendChild(b);
@@ -1714,8 +1726,7 @@ function renderPolyGrid(){
       const b=document.createElement("button");
       b.type="button";
       b.className="cell l"+L+" s"+state+(i?"":" beat");
-      b.setAttribute("aria-label",
-        (L ? "pulse" : "cross-rhythm")+" note "+(i+1)+": "+CELL_NAMES[state]);
+      label(b, (L ? "pulse" : "cross-rhythm")+" note "+(i+1)+": "+CELL_NAMES[state]);
       b.onclick=()=>{
         cfg.polyClick[L][i]=(cfg.polyClick[L][i]+1)%3;
         renderGrid();
@@ -1739,8 +1750,7 @@ function renderGrid(){
     b.type="button";
     b.className="cell s"+state+(beat?" beat":"");
     if (beat) b.dataset.n = String(Math.floor(i/sub)+1);
-    b.setAttribute("aria-label",
-      "beat "+(Math.floor(i/sub)+1)+(beat?"":" +"+(i%sub))+": "+names[state]);
+    label(b, "beat "+(Math.floor(i/sub)+1)+(beat?"":" +"+(i%sub))+": "+names[state]);
     b.onclick=()=>{ cfg.click[i]=(cfg.click[i]+1)%3; renderGrid(); };
     host.appendChild(b);
     gridEls.push(b);
@@ -1990,8 +2000,12 @@ const saveSet = t => Store.putSet(t);
 function renderRun(){
   const chip = $("runChip"), on = !!runSet && runIdx >= 0;
   chip.hidden = !on;
-  if (on) chip.innerHTML = runSet.name +
-    ' <span class="rn">' + (runIdx + 1) + '/' + runSet.drills.length + '</span>';
+  if (on){
+    chip.innerHTML = runSet.name +
+      ' <span class="rn">' + (runIdx + 1) + '/' + runSet.drills.length + '</span>';
+    label(chip, "Running " + runSet.name + ", drill " + (runIdx + 1) +
+                " of " + runSet.drills.length);
+  }
 }
 
 function playSet(t){
@@ -2034,11 +2048,15 @@ function toast(text){
   msgT = setTimeout(() => m.classList.remove("on"), 1900);
 }
 
-function mini(text, label, fn, cls){
+/* `why`, not `label` — the parameter used to be called that and now shadows the
+   helper it needs to call. These buttons are a glyph and nothing else, so this
+   string is the only place their purpose is written down: for a screen reader
+   before, and for a hover as well now. */
+function mini(text, why, fn, cls){
   const b = document.createElement("button");
   b.type = "button"; b.className = "mini" + (cls ? " " + cls : "");
   b.textContent = text;
-  if (label) b.setAttribute("aria-label", label);
+  if (why) label(b, why);
   b.onclick = fn;
   return b;
 }
@@ -2065,7 +2083,7 @@ function renderSteps(t, host){
     const len = document.createElement("button");
     len.type = "button"; len.className = "tval slen";
     len.setAttribute("role", "spinbutton");
-    len.setAttribute("aria-label", "Drill " + (i+1) + " length in " + st.len.u);
+    label(len, "Drill " + (i+1) + " length in " + st.len.u);
     len.setAttribute("aria-valuenow", st.len.n);
     // The unit lives on the toggle beside it, which both shows and changes it.
     len.innerHTML = "<b>" + st.len.n + "</b>";
@@ -2134,7 +2152,7 @@ function renderSetModal(){
   for (const t of list){
     const b = chip("sm", false);
     b.innerHTML = t.name + '<span class="ct">' + t.drills.length + '</span>';
-    b.setAttribute("aria-label", "Add this drill to " + t.name);
+    label(b, "Add this drill to " + t.name);
     b.onclick = () => addToSet(t);
     ap.appendChild(b);
   }
@@ -2232,8 +2250,7 @@ function renderFeelBtn(){
   const on = !!cfg.feel;
   $("feelNow").textContent = on ? cfg.feel.short : "straight";
   $("feelBtn").classList.toggle("on", on);
-  $("feelBtn").setAttribute("aria-label",
-    "Feel: " + (on ? cfg.feel.name : "straight") + ". Choose a feel");
+  label($("feelBtn"), "Feel: " + (on ? cfg.feel.name : "straight") + ". Choose a feel");
 }
 
 function renderFeelList(){

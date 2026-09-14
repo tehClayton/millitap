@@ -3,6 +3,17 @@
    two subtly different copies. */
 "use strict";
 
+/* aria-label and title carry the same sentence to two different audiences, and
+   a control with one but not the other is either unreadable to a screen reader
+   or unexplained on hover. Setting both in one call is what keeps them in step
+   as the wording changes — and it does change, since several of these say what
+   the control currently IS as well as what it does. */
+function label(el, text){
+  el.setAttribute("aria-label", text);
+  el.title = text;
+  return el;
+}
+
 /* The value, floated clear of the finger covering it.
 
    Whether to show it is decided from the POINTER THAT IS ACTUALLY DRAGGING,
