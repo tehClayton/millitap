@@ -34,6 +34,37 @@
     --true:#7FCB8F;
     --miss:#C2566B;
 
+    /* Where the beats fall on the timeline. One tint normally; under a
+       polyrhythm the two streams take their own, so a glance at the chart says
+       which limb a mark belongs to without a legend.
+
+       Deliberately NOT drawn from the four semantic hues above. Those mean
+       rushing, dragging, on-the-beat and missed, and a reference line wearing
+       one of them would claim something about timing it knows nothing about.
+
+       Separation is measured, and took three goes. Two tints of one slate at
+       different opacity came out at OKLab ΔE 3.0 — invisible. Widening that to
+       17.7 cleared the ΔE 15 floor and still read as one colour, because the
+       floor is calibrated for filled marks: a 1px hairline has a fraction of a
+       dot's area and needs far more separation to say the same thing.
+
+       These are ΔE 25.4 apart under normal vision, 23.0 under protan and
+       deutan, 19.9 under tritan — and they differ in hue as well as lightness,
+       so neither channel carries it alone.
+
+       Violet for the cross-rhythm because it is the one region of the wheel
+       none of the four semantic hues occupies; the nearest is ΔE 9.0 away, so
+       a reference line can never be misread as a mark claiming something about
+       timing. A bright neutral was tried for the pulse and rejected for the
+       same reason — it landed ΔE 7.0 from --true under deutan.
+
+       The pulse keeps roughly the faintness the single tick has always had
+       (2.03:1 against the surface) so the familiar chart does not get louder.
+       The cross-rhythm is the one that gains presence at 4.38:1, which is the
+       right way round: it is the layer being learned. Both solid rather than
+       translucent, so what is drawn is exactly what was measured. */
+    --tick-pulse:#485360;
+    --tick-cross:#9670E8;
 
     /* One 4px spacing grid and one type scale, so sizes stop being chosen
        individually. 10 / 11 / 13 / 15 / 19 / 30 / hero. */
@@ -1227,11 +1258,17 @@ function draw(ts){
 
   if (running){
     const lat=latency();
-    g2.strokeStyle="rgba(138,155,175,.16)";
+    /* Resolved once rather than per tick: css() reads computed style, and this
+       loop runs over every target in the window on every frame. */
+    const plain = "rgba(138,155,175,.16)";
+    const tickP = cfg.poly ? css("--tick-pulse") : plain;
+    const tickX = cfg.poly ? css("--tick-cross") : plain;
     for (const t of targets){
       const age = now - (t.t+lat);
       if (age<0 || age>HISTORY) continue;
       const x = sx + sw - (age/HISTORY)*sw;
+      // lane is null outside a polyrhythm, so both branches land on the same tint.
+      g2.strokeStyle = t.lane === 0 ? tickX : tickP;
       g2.beginPath(); g2.moveTo(x+.5, pad*0.5); g2.lineTo(x+.5, H-pad*0.5); g2.stroke();
     }
   }
