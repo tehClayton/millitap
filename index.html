@@ -297,7 +297,9 @@
     border:1px solid var(--rule);box-shadow:inset 0 1px 0 rgba(255,255,255,.055)}
   .mini.warn{color:var(--miss);border-color:rgba(194,86,107,.4)}
   .mini.go{color:var(--true);border-color:rgba(127,203,143,.45)}
-
+  /* Loading a drill's settings changes the page behind the panel rather than
+     the row you pressed, so it reads as an action on the app, not on the set. */
+  .mini.load{color:var(--ink);font-size:13px}
   .ct{color:var(--ink-mute);font-family:var(--fig);font-size:11px;margin-left:6px}
 
   .sect{display:grid;gap:var(--sp2);padding:var(--sp3) var(--sp4)}
@@ -484,6 +486,18 @@
     font-size:13px;font-weight:600;display:none;z-index:30;
     box-shadow:0 10px 28px rgba(0,0,0,.5)}
 
+  /* Its own element rather than a second use of #toast: that one is the service
+     worker's update prompt and carries a click-to-reload handler, and a
+     confirmation that reloaded the page would be a poor confirmation. */
+  #msg{position:fixed;left:50%;transform:translateX(-50%) translateY(6px);
+    bottom:calc(var(--sp4) + env(safe-area-inset-bottom));
+    background:var(--panel-hi);color:var(--ink);border:1px solid var(--rule);
+    padding:9px 15px;border-radius:var(--r1);font-size:12px;z-index:29;
+    box-shadow:0 10px 28px rgba(0,0,0,.5);pointer-events:none;
+    opacity:0;visibility:hidden;
+    transition:opacity .14s linear, transform .14s ease-out}
+  #msg.on{opacity:1;visibility:visible;transform:translateX(-50%) translateY(0)}
+  @media (prefers-reduced-motion:reduce){ #msg{transition:none} }
 </style>
 </head>
 <body>
@@ -696,6 +710,7 @@
 
 <div id="lastPop" aria-hidden="true"></div>
 <div id="flash" hidden></div>
+<div id="msg" role="status" aria-live="polite"></div>
 <div id="toast">Updated — tap to reload</div>
 
 <script src="store.js"></script>
@@ -2008,6 +2023,17 @@ function newSet(){
   return t;
 }
 
+/* A brief confirmation for something that happened behind a panel that has
+   since closed. role=status, so it is announced without stealing focus. */
+let msgT = null;
+function toast(text){
+  const m = $("msg");
+  m.textContent = text;
+  m.classList.add("on");
+  clearTimeout(msgT);
+  msgT = setTimeout(() => m.classList.remove("on"), 1900);
+}
+
 function mini(text, label, fn, cls){
   const b = document.createElement("button");
   b.type = "button"; b.className = "mini" + (cls ? " " + cls : "");
@@ -2068,6 +2094,19 @@ function renderSteps(t, host){
       st.len.n = secs ? 8 : 60;      // a sane default in the unit you switched to
       saveSet(t); renderSetModal();
     }, "unit"));
+    /* Lifts a drill's configuration back out of the set and onto the page,
+       without starting the set. Sets were the only place some configurations
+       existed once they had been captured, so the only way back to one was to
+       rebuild it by hand or run the whole set to reach it. */
+    ctl.appendChild(mini("⤒", "Load this drill's settings", () => {
+      /* Stop first: applyDrill rebuilds the pattern, and a running scheduler
+         has already queued a lookahead's worth of the old one. */
+      if (running){ stop(); runSet = null; runIdx = -1; renderRun(); }
+      applyDrill(st);
+      clearAll();          // the count belonged to whatever was configured before
+      showSets(false);
+      toast("Loaded " + (st.label || "drill " + (i+1)));
+    }, "load"));
     ctl.appendChild(mini("↑", "Move drill up", () => {
       if (i > 0){ const p = t.drills[i-1]; t.drills[i-1] = t.drills[i]; t.drills[i] = p;
                   saveSet(t); renderSetModal(); }
