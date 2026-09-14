@@ -131,6 +131,7 @@
   .tempo .tval, .tempo .tramp{--reach:12px}
   .tval::before, .tramp::before{content:"";position:absolute;left:0;right:0;
     top:calc(0px - var(--reach));bottom:calc(0px - var(--reach))}
+
   .tval.drag i{color:var(--ink-dim)}
   .tval:focus-visible{outline:2px solid var(--true);outline-offset:2px}
   /* The live readout is output, not input: no raised face, nothing to grab. */
@@ -274,6 +275,7 @@
     border:1px solid var(--rule);box-shadow:inset 0 1px 0 rgba(255,255,255,.055)}
   .mini.warn{color:var(--miss);border-color:rgba(194,86,107,.4)}
   .mini.go{color:var(--true);border-color:rgba(127,203,143,.45)}
+
   .ct{color:var(--ink-mute);font-family:var(--fig);font-size:11px;margin-left:6px}
 
   .sect{display:grid;gap:var(--sp2);padding:var(--sp3) var(--sp4)}
@@ -353,6 +355,36 @@
   .ptog[aria-pressed="true"] svg{opacity:1}
   .ptog:focus-visible{outline:2px solid var(--true);outline-offset:2px}
 
+  /* The feel button states its own value rather than labelling itself "feel":
+     the band exists so the drill's configuration is legible mid-take, and a
+     control that reads "swing" has already answered the question a control
+     reading "feel" would make you open it to ask. */
+  .feelbtn{display:flex;align-items:center;gap:3px;min-width:62px}
+  .feelbtn .cev{width:11px;height:11px;fill:currentColor;opacity:.5;
+    flex:0 0 auto;margin-right:-2px}
+  /* Lit only when a feel is loaded. Straight is the absence of one, not an
+     eighth option, so it leaves the button looking like every other unset
+     control on the row. */
+  .feelbtn.on{background:var(--true);border-color:var(--true);color:#0C1710}
+  .feelbtn.on .cev{opacity:.7}
+  .feelbtn.live{border-color:var(--ink-mute)}
+  .feelbtn:focus-visible{outline:2px solid var(--true);outline-offset:2px}
+
+  /* One row per feel, with the full name the chips never had room for. */
+  #feelList{display:grid;gap:2px}
+  .feelopt{display:flex;align-items:baseline;gap:var(--sp3);width:100%;
+    padding:9px 10px;border-radius:var(--r1);text-align:left;
+    background:rgba(255,255,255,.022);border:1px solid transparent;
+    color:var(--ink);font-family:inherit;font-size:13px;line-height:1.3}
+  .feelopt .fshort{margin-left:auto;flex:0 0 auto;
+    font-family:var(--fig);font-size:11px;color:var(--ink-mute)}
+  .feelopt.sel{background:rgba(127,203,143,.12);border-color:var(--true)}
+  .feelopt.sel .fshort{color:var(--true)}
+  .feelopt:focus-visible{outline:2px solid var(--true);outline-offset:-2px}
+  /* Straight is what you return to, so it sits apart from the seven rather
+     than reading as one of them. */
+  .feelopt.none{margin-bottom:var(--sp2)}
+
   /* Cells divide the width rather than wrapping. Sixteenths in 7/8 is 28 of
      them; wrapping made the block's height depend on the meter, and one bar
      should read as one row whatever it contains. */
@@ -429,6 +461,7 @@
     background:var(--true);color:#0C1710;padding:11px 17px;border-radius:var(--r1);
     font-size:13px;font-weight:600;display:none;z-index:30;
     box-shadow:0 10px 28px rgba(0,0,0,.5)}
+
 </style>
 </head>
 <body>
@@ -474,7 +507,17 @@
     </button>
     <div class="pick" id="meterPick"></div>
     <div class="pick" id="notePick"></div>
-    <div class="pick" id="feelPick"></div>
+    <!-- Seven feels were seven chips competing with everything else on the one
+         row this band is allowed. One button, naming whichever is loaded, says
+         the same thing in a seventh of the width — and the modal it opens has
+         room for the full names, which until now only existed in aria-label. -->
+    <button class="chip sm feelbtn" type="button" id="feelBtn"
+      aria-haspopup="dialog" aria-expanded="false">
+      <span id="feelNow">straight</span>
+      <svg class="cev" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M7 10l5 5 5-5z"/>
+      </svg>
+    </button>
     <div class="pick" id="polyPick" hidden></div>
     <div class="grid" id="clickGrid"></div>
     <div class="bars" id="barGrid"></div>
@@ -524,6 +567,13 @@
 </div>
 
 <div id="scrim" hidden></div>
+
+<div id="feelModal" class="settings" hidden>
+  <div class="sect">
+    <h2>Feel <span class="hint">how the notes sit against the beat</span></h2>
+    <div id="feelList"></div>
+  </div>
+</div>
 
 <div id="setsModal" class="settings" hidden>
   <div class="sect">
@@ -1298,7 +1348,7 @@ function buildPads(){
 
 addEventListener("keydown", e => {
   if (e.repeat) return;
-  if (e.key==="Escape"){ setSettings(false); showSets(false); return; }
+  if (e.key==="Escape"){ setSettings(false); showSets(false); showFeel(false); return; }
   if (e.code==="Space"){ e.preventDefault(); toggle(); return; }
   const n = parseInt(e.key,10);
   if (n>=1 && n<=cfg.pads && ctx){ e.preventDefault(); tap(n-1, e.timeStamp); }
@@ -1469,15 +1519,7 @@ function renderPickers(){
     np.appendChild(b);
   }
 
-  const fp=$("feelPick"); fp.innerHTML="";
-  for (const f of FEELS){
-    const b=chip("sm", cfg.feel===f);
-    b.textContent=f.short;
-    // The full name only exists in the label; a screen reader should get it.
-    b.setAttribute("aria-label", f.name);
-    b.onclick=()=>{ cfg.feel = cfg.feel===f ? null : f; rebuild(); };
-    fp.appendChild(b);
-  }
+  renderFeelBtn();
 
   const yp=$("polyPick"); yp.innerHTML="";
   for (const p of POLYS){
@@ -1493,7 +1535,7 @@ function renderPickers(){
      which is the constraint the whole band was built around. */
   $("meterPick").hidden = poly;
   $("notePick").hidden  = poly;
-  $("feelPick").hidden  = poly;
+  $("feelBtn").hidden   = poly;
   $("polyPick").hidden  = !poly;
   $("polyTog").setAttribute("aria-pressed", String(poly));
 
@@ -1736,6 +1778,8 @@ $("polyTog").onclick = () => {
    the gesture every DAW uses on a value field. px is how far you drag for one
    notch, so the seconds field moves five at a time over a range twelve times
    wider than the tempo without feeling twelve times slower. */
+
+
 const TF = {
   tFrom: { get:()=>cfg.bpm,       set:v=>cfg.bpm=v,       min:30, max:220, step:1, px:3 },
   tTo:   { get:()=>cfg.ramp.to,   set:v=>cfg.ramp.to=v,   min:30, max:220, step:1, px:3 },
@@ -2081,22 +2125,90 @@ function renderSetModal(){
   }
 }
 
+/* The scrim belongs to whichever overlays are open, not to the last one that
+   changed. Each panel asking "is anyone else still up?" was one panel away
+   from getting it wrong, and three is past where that holds. */
+const OVERLAYS = ["settings", "setsModal", "feelModal"];
+function syncScrim(){
+  $("scrim").hidden = OVERLAYS.every(id => $(id).hidden);
+}
+
+/* Pinned under the row that opens it, measured rather than hard-coded, so the
+   panel follows the strip however the row above it happens to wrap. */
+function dropUnder(m, sel){
+  const r = document.querySelector(sel).getBoundingClientRect();
+  m.style.top = Math.round(r.bottom + 8) + "px";
+  m.style.maxHeight = "calc(100vh - " + Math.round(r.bottom + 22) + "px)";
+}
+
 function showSets(open){
   const m = $("setsModal");
   if (open){
-    setSettings(false);
-    const r = document.querySelector(".transport").getBoundingClientRect();
-    m.style.top = Math.round(r.bottom + 8) + "px";
-    m.style.maxHeight = "calc(100vh - " + Math.round(r.bottom + 22) + "px)";
+    /* Safe mutual calls: each panel only clears the others while opening, so
+       the chain is one level deep in every direction. */
+    setSettings(false); showFeel(false);
+    dropUnder(m, ".transport");
     renderSetModal();
   }
   m.hidden = !open;
-  $("scrim").hidden = !open && $("settings").hidden;
+  syncScrim();
   $("setsBtn").classList.toggle("live", open);
   $("setsBtn").setAttribute("aria-expanded", String(open));
 }
 
 $("setsBtn").onclick = () => showSets($("setsModal").hidden);
+
+/* ------------------------------------------------------------------- feel */
+function renderFeelBtn(){
+  const on = !!cfg.feel;
+  $("feelNow").textContent = on ? cfg.feel.short : "straight";
+  $("feelBtn").classList.toggle("on", on);
+  $("feelBtn").setAttribute("aria-label",
+    "Feel: " + (on ? cfg.feel.name : "straight") + ". Choose a feel");
+}
+
+function renderFeelList(){
+  const host = $("feelList"); host.innerHTML = "";
+
+  const row = (name, short, sel, pick, extra) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "feelopt" + (sel ? " sel" : "") + (extra ? " " + extra : "");
+    b.setAttribute("aria-pressed", String(sel));
+    const n = document.createElement("span");
+    n.className = "fname"; n.textContent = name;
+    b.appendChild(n);
+    if (short){
+      const s = document.createElement("span");
+      s.className = "fshort"; s.textContent = short;
+      b.appendChild(s);
+    }
+    b.onclick = () => { pick(); showFeel(false); rebuild(); };
+    host.appendChild(b);
+  };
+
+  /* Clearing the feel is an option in the list rather than a second press on
+     the one already chosen. The chips toggled, which meant the way back out
+     was invisible unless you already knew it was there. */
+  row("Straight", null, !cfg.feel, () => { cfg.feel = null; }, "none");
+  for (const f of FEELS)
+    row(f.name, f.short, cfg.feel === f, () => { cfg.feel = f; });
+}
+
+function showFeel(open){
+  const m = $("feelModal");
+  if (open){
+    setSettings(false); showSets(false);
+    dropUnder(m, ".pattern");
+    renderFeelList();
+  }
+  m.hidden = !open;
+  syncScrim();
+  $("feelBtn").classList.toggle("live", open);
+  $("feelBtn").setAttribute("aria-expanded", String(open));
+}
+
+$("feelBtn").onclick = () => showFeel($("feelModal").hidden);
 
 /* ------------------------------------------------------------------ backup */
 function download(name, text, type){
@@ -2160,18 +2272,21 @@ $("run").onclick = toggle;
 function setSettings(open){
   const s=$("settings");
   if (open){
-    const r = document.querySelector(".transport").getBoundingClientRect();
-    s.style.top = Math.round(r.bottom + 8) + "px";
-    s.style.maxHeight = "calc(100vh - " + Math.round(r.bottom + 22) + "px)";
+    /* Closing the siblings belongs here, not in the gear's click handler.
+       While it lived there, every other way of opening settings left another
+       panel up behind it — and each new panel made one more caller responsible
+       for remembering. All three now clear the others on the way up. */
+    showSets(false); showFeel(false);
+    dropUnder(s, ".transport");
   }
   s.hidden = !open;
-  $("scrim").hidden = !open;
+  syncScrim();
   $("gear").classList.toggle("on", open);
   $("gear").setAttribute("aria-expanded", String(open));
 }
 
-$("gear").onclick  = () => { showSets(false); setSettings($("settings").hidden); };
-$("scrim").onclick = () => { setSettings(false); showSets(false); };
+$("gear").onclick  = () => setSettings($("settings").hidden);
+$("scrim").onclick = () => { setSettings(false); showSets(false); showFeel(false); };
 
 /* Deliberately stall the main thread, to test whether touch timestamps
    survive it. Interval is prime-ish so it never locks to the beat. */
