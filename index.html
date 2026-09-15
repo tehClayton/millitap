@@ -512,6 +512,21 @@
     box-shadow:inset 0 0 0 1px rgba(0,0,0,.4)}
   .diag b{color:var(--ink);font-weight:500}
 
+  /* Listening only. The measurement surfaces do not go blank, they go away:
+     an empty chart still reads as a chart that has nothing to say yet, where
+     no chart at all reads as a mode that is not measuring. What is left is the
+     pattern strip with its playhead and the pads, which is what a metronome
+     should look like.
+
+     The pads stay, dimmed and inert. You may well want to play along without
+     being counted, and hiding them would both deny that and jump the layout. */
+  body.listening .display,
+  body.listening .drift,
+  body.listening .readout{display:none}
+  body.listening .pad{opacity:.34;pointer-events:none}
+  body.listening #lastPop{display:none}
+  .iconbtn.on{color:var(--true);background:var(--panel-hi);border-color:var(--rule)}
+
   #toast{position:fixed;left:50%;transform:translateX(-50%);
     bottom:calc(var(--sp4) + env(safe-area-inset-bottom));
     background:var(--true);color:#0C1710;padding:11px 17px;border-radius:var(--r1);
@@ -633,6 +648,14 @@
       <span class="tval live" id="tNow" hidden><b>—</b><i>now</i></span>
     </div>
   </div>
+  <!-- Beside play, because it changes what pressing play does rather than
+       what the drill is. -->
+  <button class="iconbtn" id="listenTog" type="button" aria-pressed="false"
+    aria-label="Listen only" title="Listen only — play the click without being measured">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 3a8 8 0 0 0-8 8v6a2 2 0 0 0 2 2h1a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H6v-1a6 6 0 0 1 12 0v1h-1a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h1a2 2 0 0 0 2-2v-6a8 8 0 0 0-8-8z"/>
+    </svg>
+  </button>
   <button class="iconbtn" id="setsBtn" type="button" aria-label="Drill sets"
     aria-expanded="false"
     title="Sets — build a playlist of drills, or run one">
@@ -857,6 +880,17 @@ const cfg = { bpm:84, meter:METERS[0], note:NOTES[0], feel:null, poly:null,
               pattern:null, click:[], pads:2, padMode:"any", countIn:1, offset:0,
               padLanes:[0,1], polyClick:[[],[]],
               phrase:4, bars:[1,1,1,1], ramp:{on:false, to:120, secs:30} };
+/* Listen-only: the click plays and nothing is measured. No targets are
+   scheduled, so there is nothing for a tap to hit, nothing to miss, and
+   nothing to record — the absence of data is a consequence of the mode rather
+   than a filter applied afterwards, which is the only version of "no data
+   captured" worth trusting.
+
+   It is a property of the app rather than of the drill: it survives loading a
+   drill or running a set, because it describes what you are doing right now,
+   not what the exercise is. */
+let listen = false;
+
 const muted = () => cfg.bars.some(x => !x);
 const LOOKAHEAD=0.18, TICK=25, HISTORY=10;
 const beatDur = () => 60/cfg.bpm;
@@ -1021,7 +1055,11 @@ function schedule(){
   const on=cfg.pattern.on, len=on.length, bars=cfg.pattern.beats;
   const beatOf = n => Math.floor(n/len)*bars + on[n%len].p + (on[n%len].o||0);
 
-  while (startTime + timeAt(beatOf(nextOnset)) < horizon){
+  /* The one place the mode really lives. Everything downstream — matching,
+     missing, the chart, the record — reads from targets, so not creating them
+     switches all of it off at once instead of in five places that could
+     disagree. */
+  while (!listen && startTime + timeAt(beatOf(nextOnset)) < horizon){
     const k=nextOnset%len, o=on[k];
     const t = startTime + timeAt(beatOf(nextOnset));
     /* A null voice means any pad satisfies this onset. That is the default:
@@ -1098,7 +1136,7 @@ function schedule(){
 function tap(voice, perfMs){
   const lag = performance.now() - perfMs;   // the diagnostic figure
   flash(voice);
-  if (!running) return;
+  if (!running || listen) return;
 
   const t=toCtx(perfMs), w=captureWindow(), lat=latency();
   const lane = cfg.poly ? laneOf(voice) : null;
@@ -1421,7 +1459,7 @@ function buildPads(){
     }
     el.addEventListener("pointerdown", e => {
       e.preventDefault();
-      if (!ctx) return;
+      if (!ctx || listen) return;
       tap(i, e.timeStamp);
     }, {passive:false});
     host.appendChild(el); padEls.push(el);
@@ -1438,7 +1476,7 @@ addEventListener("keydown", e => {
   if (e.key==="Escape"){ setSettings(false); showSets(false); showFeel(false); return; }
   if (e.code==="Space"){ e.preventDefault(); toggle(); return; }
   const n = parseInt(e.key,10);
-  if (n>=1 && n<=cfg.pads && ctx){ e.preventDefault(); tap(n-1, e.timeStamp); }
+  if (n>=1 && n<=cfg.pads && ctx && !listen){ e.preventDefault(); tap(n-1, e.timeStamp); }
 });
 
 /* ============================== transport ============================== */
@@ -1485,6 +1523,7 @@ let savedCount=0, savedMissed=0, savedExtra=0;
 const MIN_HITS = 8;
 
 function captureSession(){
+  if (listen) return;          // belt and braces: there is nothing to capture
   const fresh = taps.slice(savedCount);
   const hits  = fresh.filter(x => x.kind==="hit" && x.k!=null);
   // Below the threshold, leave the marker alone so a few stray taps roll into
@@ -2281,6 +2320,31 @@ function showSets(open){
 }
 
 $("setsBtn").onclick = () => showSets($("setsModal").hidden);
+
+/* ---------------------------------------------------------------- listen */
+/* Stop BEFORE flipping the flag, so a run that was being measured is captured
+   under the mode it was played in. Flipping first would file a real session
+   under a mode that discards them. */
+function setListen(on){
+  const was = running;
+  if (running){ stop(); runSet = null; runIdx = -1; renderRun(); }
+  listen = on;
+  document.body.classList.toggle("listening", on);
+  $("listenTog").classList.toggle("on", on);
+  $("listenTog").setAttribute("aria-pressed", String(on));
+  label($("listenTog"), on
+    ? "Listening only — nothing is being measured. Tap to measure again."
+    : "Listen only — play the click without being measured");
+  /* The measurement wells are gone in this mode, so their canvases lay out at
+     zero width. Measure again once the class has landed, in both directions. */
+  buildPads();
+  clearAll();
+  stats();
+  resize();
+  if (was) start();
+}
+
+$("listenTog").onclick = () => setListen(!listen);
 
 /* ------------------------------------------------------------------- feel */
 function renderFeelBtn(){
