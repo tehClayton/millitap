@@ -512,19 +512,32 @@
     box-shadow:inset 0 0 0 1px rgba(0,0,0,.4)}
   .diag b{color:var(--ink);font-weight:500}
 
-  /* Listening only. The measurement surfaces do not go blank, they go away:
-     an empty chart still reads as a chart that has nothing to say yet, where
-     no chart at all reads as a mode that is not measuring. What is left is the
-     pattern strip with its playhead and the pads, which is what a metronome
-     should look like.
+  /* Listening only: everything that measures is dimmed, not removed. Greying
+     says "this is switched off" — removing only says something is gone, and
+     leaves you working out what. It also keeps the page still: toggling the
+     mode no longer reflows the layout underfoot, and the canvases keep their
+     laid-out size instead of being measured at zero width and needing to be
+     re-measured on the way back.
 
-     The pads stay, dimmed and inert. You may well want to play along without
-     being counted, and hiding them would both deny that and jump the layout. */
+     The pads are dimmed on the same setting and made inert with it — pressing
+     one does nothing and does not light up, because a pad that flashed back
+     without counting would be the one genuinely ambiguous thing on the page.
+     Dimmed and unresponsive says which mode you are in; dimmed and responsive
+     would only raise the question. */
   body.listening .display,
   body.listening .drift,
-  body.listening .readout{display:none}
-  body.listening .pad{opacity:.34;pointer-events:none}
+  body.listening .readout,
+  body.listening .pads{opacity:.34;transition:opacity .12s linear}
+  body.listening .pads{pointer-events:none}
+  /* The ephemeral last-tap value has nothing to report and would otherwise sit
+     over a dimmed page at full strength. */
   body.listening #lastPop{display:none}
+  @media (prefers-reduced-motion:reduce){
+    body.listening .display,
+    body.listening .drift,
+    body.listening .readout,
+    body.listening .pads{transition:none}
+  }
   .iconbtn.on{color:var(--true);background:var(--panel-hi);border-color:var(--rule)}
 
   #toast{position:fixed;left:50%;transform:translateX(-50%);
@@ -2335,12 +2348,11 @@ function setListen(on){
   label($("listenTog"), on
     ? "Listening only — nothing is being measured. Tap to measure again."
     : "Listen only — play the click without being measured");
-  /* The measurement wells are gone in this mode, so their canvases lay out at
-     zero width. Measure again once the class has landed, in both directions. */
+  /* Rebuild the pads so their listeners see the new flag, and clear the count
+     so a dimmed readout is not quietly still showing the last drill's figures. */
   buildPads();
   clearAll();
   stats();
-  resize();
   if (was) start();
 }
 
