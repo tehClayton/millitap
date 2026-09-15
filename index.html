@@ -258,6 +258,23 @@
   #lastPop.c-true{color:var(--true)}
   #lastPop.c-miss{color:var(--miss)}
 
+  /* The same readout at pad scale, sitting just above the face that was struck.
+     Smaller than the centred one because there are two of them and they are
+     read together — the comparison between the pair is the point, not either
+     number on its own. */
+  .padpop{position:absolute;bottom:100%;left:0;right:0;margin-bottom:6px;
+    text-align:center;pointer-events:none;z-index:14;
+    font-family:var(--fig);font-size:clamp(26px,6vh,44px);font-weight:500;
+    letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1;
+    opacity:0;transition:opacity .5s ease;
+    text-shadow:0 6px 34px rgba(5,9,13,.8)}
+  .padpop.on{opacity:1;transition:none}
+  .padpop.c-rush{color:var(--rush)}
+  .padpop.c-drag{color:var(--drag)}
+  .padpop.c-true{color:var(--true)}
+  .padpop.c-miss{color:var(--miss)}
+  @media (prefers-reduced-motion:reduce){ .padpop{transition:none} }
+
   /* The pads are the thing your hands aim at and had the least design on the
      screen. Now they are the most raised surface in the app, with the numeral
      demoted to a small mark at the foot so the striking face stays clean. */
@@ -1186,15 +1203,34 @@ function tap(voice, perfMs){
    marked missed — and re-flashing the previous tap's number at that moment would
    report something that did not just happen. */
 let popT = null;
+/* Under a polyrhythm each pad gets its own, floated over the pad that struck
+   it, so the figure appears where the hand it belongs to actually is. One
+   centred number could only ever report whichever limb hit last — and in a
+   polyrhythm "which of the two was late" is the entire question, so the single
+   readout was answering it by coin toss.
+
+   Outside a polyrhythm there is one stream and the centred figure stays as it
+   was: several numbers for one rhythm would be clutter reporting nothing. */
+let padPops = [];
+const popFor = t => (cfg.poly && padPops[t.voice]) || $("lastPop");
+
 function popLast(t){
-  const el = $("lastPop");
-  if (t.kind !== "hit"){ el.textContent = "✕"; el.className = "c-miss on"; }
+  const el = popFor(t);
+  /* The per-pad readouts carry a base class that positions them; the centred
+     one has none. Filtering keeps the centred element's class string exactly
+     what it always was rather than gaining a leading space. */
+  const cls = (...a) => a.filter(Boolean).join(" ");
+  if (t.kind !== "hit"){ el.textContent = "✕"; el.className = cls(el._base, "c-miss", "on"); }
   else {
     el.textContent = ms(t.dev);
-    el.className = (t.dev < -4 ? "c-rush" : t.dev > 4 ? "c-drag" : "c-true") + " on";
+    el.className = cls(el._base,
+      t.dev < -4 ? "c-rush" : t.dev > 4 ? "c-drag" : "c-true", "on");
   }
-  clearTimeout(popT);
-  popT = setTimeout(() => el.classList.remove("on"), 430);
+  /* The timer lives on the element, not in one shared variable: two pads fade
+     on their own clocks, and a shared one would cut the first short whenever
+     the second landed. */
+  clearTimeout(el._pop);
+  el._pop = setTimeout(() => el.classList.remove("on"), 430);
 }
 
 function flash(v){
@@ -1213,6 +1249,8 @@ function paint(v, colour){
 /* ============================== readout ============================== */
 const $ = id => document.getElementById(id);
 const ms = n => (n>0?"+":n<0?"−":"") + Math.abs(n).toFixed(0);
+
+$("lastPop")._base = "";
 
 function stats(){
   const hits = taps.filter(x=>x.kind==="hit");
@@ -1457,7 +1495,7 @@ requestAnimationFrame(draw);
 
 /* ============================== pads ============================== */
 function buildPads(){
-  const host=$("pads"); host.innerHTML=""; padEls=[];
+  const host=$("pads"); host.innerHTML=""; padEls=[]; padPops=[];
   for (let i=0;i<cfg.pads;i++){
     const el=document.createElement("div");
     const L = laneOf(i);
@@ -1469,6 +1507,9 @@ function buildPads(){
       tag.textContent = L ? cfg.poly.y : cfg.poly.x;
       el.appendChild(tag);
       label(el, "pad "+(i+1)+", playing the "+(L ? cfg.poly.y : cfg.poly.x));
+      const pop = document.createElement("span");
+      pop.className = "padpop"; pop._base = "padpop";
+      el.appendChild(pop); padPops.push(pop);
     }
     el.addEventListener("pointerdown", e => {
       e.preventDefault();
