@@ -258,6 +258,23 @@
   #lastPop.c-true{color:var(--true)}
   #lastPop.c-miss{color:var(--miss)}
 
+  /* The same readout at pad scale, sitting just above the face that was struck.
+     Smaller than the centred one because there are two of them and they are
+     read together — the comparison between the pair is the point, not either
+     number on its own. */
+  .padpop{position:absolute;bottom:100%;left:0;right:0;margin-bottom:6px;
+    text-align:center;pointer-events:none;z-index:14;
+    font-family:var(--fig);font-size:clamp(26px,6vh,44px);font-weight:500;
+    letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1;
+    opacity:0;transition:opacity .5s ease;
+    text-shadow:0 6px 34px rgba(5,9,13,.8)}
+  .padpop.on{opacity:1;transition:none}
+  .padpop.c-rush{color:var(--rush)}
+  .padpop.c-drag{color:var(--drag)}
+  .padpop.c-true{color:var(--true)}
+  .padpop.c-miss{color:var(--miss)}
+  @media (prefers-reduced-motion:reduce){ .padpop{transition:none} }
+
   /* The pads are the thing your hands aim at and had the least design on the
      screen. Now they are the most raised surface in the app, with the numeral
      demoted to a small mark at the foot so the striking face stays clean. */
@@ -512,6 +529,34 @@
     box-shadow:inset 0 0 0 1px rgba(0,0,0,.4)}
   .diag b{color:var(--ink);font-weight:500}
 
+  /* Listening only: everything that measures is dimmed, not removed. Greying
+     says "this is switched off" — removing only says something is gone, and
+     leaves you working out what. It also keeps the page still: toggling the
+     mode no longer reflows the layout underfoot, and the canvases keep their
+     laid-out size instead of being measured at zero width and needing to be
+     re-measured on the way back.
+
+     The pads are dimmed on the same setting and made inert with it — pressing
+     one does nothing and does not light up, because a pad that flashed back
+     without counting would be the one genuinely ambiguous thing on the page.
+     Dimmed and unresponsive says which mode you are in; dimmed and responsive
+     would only raise the question. */
+  body.listening .display,
+  body.listening .drift,
+  body.listening .readout,
+  body.listening .pads{opacity:.34;transition:opacity .12s linear}
+  body.listening .pads{pointer-events:none}
+  /* The ephemeral last-tap value has nothing to report and would otherwise sit
+     over a dimmed page at full strength. */
+  body.listening #lastPop{display:none}
+  @media (prefers-reduced-motion:reduce){
+    body.listening .display,
+    body.listening .drift,
+    body.listening .readout,
+    body.listening .pads{transition:none}
+  }
+  .iconbtn.on{color:var(--true);background:var(--panel-hi);border-color:var(--rule)}
+
   #toast{position:fixed;left:50%;transform:translateX(-50%);
     bottom:calc(var(--sp4) + env(safe-area-inset-bottom));
     background:var(--true);color:#0C1710;padding:11px 17px;border-radius:var(--r1);
@@ -633,6 +678,14 @@
       <span class="tval live" id="tNow" hidden><b>—</b><i>now</i></span>
     </div>
   </div>
+  <!-- Beside play, because it changes what pressing play does rather than
+       what the drill is. -->
+  <button class="iconbtn" id="listenTog" type="button" aria-pressed="false"
+    aria-label="Listen only" title="Listen only — play the click without being measured">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 3a8 8 0 0 0-8 8v6a2 2 0 0 0 2 2h1a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H6v-1a6 6 0 0 1 12 0v1h-1a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h1a2 2 0 0 0 2-2v-6a8 8 0 0 0-8-8z"/>
+    </svg>
+  </button>
   <button class="iconbtn" id="setsBtn" type="button" aria-label="Drill sets"
     aria-expanded="false"
     title="Sets — build a playlist of drills, or run one">
@@ -857,6 +910,17 @@ const cfg = { bpm:84, meter:METERS[0], note:NOTES[0], feel:null, poly:null,
               pattern:null, click:[], pads:2, padMode:"any", countIn:1, offset:0,
               padLanes:[0,1], polyClick:[[],[]],
               phrase:4, bars:[1,1,1,1], ramp:{on:false, to:120, secs:30} };
+/* Listen-only: the click plays and nothing is measured. No targets are
+   scheduled, so there is nothing for a tap to hit, nothing to miss, and
+   nothing to record — the absence of data is a consequence of the mode rather
+   than a filter applied afterwards, which is the only version of "no data
+   captured" worth trusting.
+
+   It is a property of the app rather than of the drill: it survives loading a
+   drill or running a set, because it describes what you are doing right now,
+   not what the exercise is. */
+let listen = false;
+
 const muted = () => cfg.bars.some(x => !x);
 const LOOKAHEAD=0.18, TICK=25, HISTORY=10;
 const beatDur = () => 60/cfg.bpm;
@@ -1021,7 +1085,11 @@ function schedule(){
   const on=cfg.pattern.on, len=on.length, bars=cfg.pattern.beats;
   const beatOf = n => Math.floor(n/len)*bars + on[n%len].p + (on[n%len].o||0);
 
-  while (startTime + timeAt(beatOf(nextOnset)) < horizon){
+  /* The one place the mode really lives. Everything downstream — matching,
+     missing, the chart, the record — reads from targets, so not creating them
+     switches all of it off at once instead of in five places that could
+     disagree. */
+  while (!listen && startTime + timeAt(beatOf(nextOnset)) < horizon){
     const k=nextOnset%len, o=on[k];
     const t = startTime + timeAt(beatOf(nextOnset));
     /* A null voice means any pad satisfies this onset. That is the default:
@@ -1098,7 +1166,7 @@ function schedule(){
 function tap(voice, perfMs){
   const lag = performance.now() - perfMs;   // the diagnostic figure
   flash(voice);
-  if (!running) return;
+  if (!running || listen) return;
 
   const t=toCtx(perfMs), w=captureWindow(), lat=latency();
   const lane = cfg.poly ? laneOf(voice) : null;
@@ -1135,15 +1203,34 @@ function tap(voice, perfMs){
    marked missed — and re-flashing the previous tap's number at that moment would
    report something that did not just happen. */
 let popT = null;
+/* Under a polyrhythm each pad gets its own, floated over the pad that struck
+   it, so the figure appears where the hand it belongs to actually is. One
+   centred number could only ever report whichever limb hit last — and in a
+   polyrhythm "which of the two was late" is the entire question, so the single
+   readout was answering it by coin toss.
+
+   Outside a polyrhythm there is one stream and the centred figure stays as it
+   was: several numbers for one rhythm would be clutter reporting nothing. */
+let padPops = [];
+const popFor = t => (cfg.poly && padPops[t.voice]) || $("lastPop");
+
 function popLast(t){
-  const el = $("lastPop");
-  if (t.kind !== "hit"){ el.textContent = "✕"; el.className = "c-miss on"; }
+  const el = popFor(t);
+  /* The per-pad readouts carry a base class that positions them; the centred
+     one has none. Filtering keeps the centred element's class string exactly
+     what it always was rather than gaining a leading space. */
+  const cls = (...a) => a.filter(Boolean).join(" ");
+  if (t.kind !== "hit"){ el.textContent = "✕"; el.className = cls(el._base, "c-miss", "on"); }
   else {
     el.textContent = ms(t.dev);
-    el.className = (t.dev < -4 ? "c-rush" : t.dev > 4 ? "c-drag" : "c-true") + " on";
+    el.className = cls(el._base,
+      t.dev < -4 ? "c-rush" : t.dev > 4 ? "c-drag" : "c-true", "on");
   }
-  clearTimeout(popT);
-  popT = setTimeout(() => el.classList.remove("on"), 430);
+  /* The timer lives on the element, not in one shared variable: two pads fade
+     on their own clocks, and a shared one would cut the first short whenever
+     the second landed. */
+  clearTimeout(el._pop);
+  el._pop = setTimeout(() => el.classList.remove("on"), 430);
 }
 
 function flash(v){
@@ -1162,6 +1249,8 @@ function paint(v, colour){
 /* ============================== readout ============================== */
 const $ = id => document.getElementById(id);
 const ms = n => (n>0?"+":n<0?"−":"") + Math.abs(n).toFixed(0);
+
+$("lastPop")._base = "";
 
 function stats(){
   const hits = taps.filter(x=>x.kind==="hit");
@@ -1406,7 +1495,7 @@ requestAnimationFrame(draw);
 
 /* ============================== pads ============================== */
 function buildPads(){
-  const host=$("pads"); host.innerHTML=""; padEls=[];
+  const host=$("pads"); host.innerHTML=""; padEls=[]; padPops=[];
   for (let i=0;i<cfg.pads;i++){
     const el=document.createElement("div");
     const L = laneOf(i);
@@ -1418,10 +1507,13 @@ function buildPads(){
       tag.textContent = L ? cfg.poly.y : cfg.poly.x;
       el.appendChild(tag);
       label(el, "pad "+(i+1)+", playing the "+(L ? cfg.poly.y : cfg.poly.x));
+      const pop = document.createElement("span");
+      pop.className = "padpop"; pop._base = "padpop";
+      el.appendChild(pop); padPops.push(pop);
     }
     el.addEventListener("pointerdown", e => {
       e.preventDefault();
-      if (!ctx) return;
+      if (!ctx || listen) return;
       tap(i, e.timeStamp);
     }, {passive:false});
     host.appendChild(el); padEls.push(el);
@@ -1438,7 +1530,7 @@ addEventListener("keydown", e => {
   if (e.key==="Escape"){ setSettings(false); showSets(false); showFeel(false); return; }
   if (e.code==="Space"){ e.preventDefault(); toggle(); return; }
   const n = parseInt(e.key,10);
-  if (n>=1 && n<=cfg.pads && ctx){ e.preventDefault(); tap(n-1, e.timeStamp); }
+  if (n>=1 && n<=cfg.pads && ctx && !listen){ e.preventDefault(); tap(n-1, e.timeStamp); }
 });
 
 /* ============================== transport ============================== */
@@ -1485,6 +1577,7 @@ let savedCount=0, savedMissed=0, savedExtra=0;
 const MIN_HITS = 8;
 
 function captureSession(){
+  if (listen) return;          // belt and braces: there is nothing to capture
   const fresh = taps.slice(savedCount);
   const hits  = fresh.filter(x => x.kind==="hit" && x.k!=null);
   // Below the threshold, leave the marker alone so a few stray taps roll into
@@ -2281,6 +2374,30 @@ function showSets(open){
 }
 
 $("setsBtn").onclick = () => showSets($("setsModal").hidden);
+
+/* ---------------------------------------------------------------- listen */
+/* Stop BEFORE flipping the flag, so a run that was being measured is captured
+   under the mode it was played in. Flipping first would file a real session
+   under a mode that discards them. */
+function setListen(on){
+  const was = running;
+  if (running){ stop(); runSet = null; runIdx = -1; renderRun(); }
+  listen = on;
+  document.body.classList.toggle("listening", on);
+  $("listenTog").classList.toggle("on", on);
+  $("listenTog").setAttribute("aria-pressed", String(on));
+  label($("listenTog"), on
+    ? "Listening only — nothing is being measured. Tap to measure again."
+    : "Listen only — play the click without being measured");
+  /* Rebuild the pads so their listeners see the new flag, and clear the count
+     so a dimmed readout is not quietly still showing the last drill's figures. */
+  buildPads();
+  clearAll();
+  stats();
+  if (was) start();
+}
+
+$("listenTog").onclick = () => setListen(!listen);
 
 /* ------------------------------------------------------------------- feel */
 function renderFeelBtn(){
