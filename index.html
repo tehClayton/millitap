@@ -780,7 +780,11 @@
     </div>
     <div class="diag" id="diagBox">
       touch→handler lag &nbsp;<b id="dLag">—</b><br>
-      worst frame gap &nbsp;<b id="dJank">—</b>
+      worst frame gap &nbsp;<b id="dJank">—</b><br>
+      <!-- Which build is actually running. Without it, "did that deploy?" can
+           only be answered by reading the repository, which is no use to the
+           person holding the phone. -->
+      version &nbsp;<b id="dVer">—</b>
     </div>
     <p class="note">This answers whether Safari's touch timestamps come from the hardware or from
       whenever the page got round to handling them. Run a normal drill and note your spread. Turn
@@ -2530,6 +2534,19 @@ $("scrim").onclick = () => { setSettings(false); showSets(false); showFeel(false
 
 /* Deliberately stall the main thread, to test whether touch timestamps
    survive it. Interval is prime-ish so it never locks to the beat. */
+/* Asked of the cache the running page was served from, rather than of a
+   constant compiled into the page: a stale page reporting the version it
+   wished it were would be worse than no figure at all. */
+if (window.caches && caches.keys){
+  caches.keys().then(ks => {
+    const mine = ks.filter(k => k.indexOf("millitap-") === 0)
+                   .map(k => k.slice("millitap-".length));
+    $("dVer").textContent = mine.length ? mine.join(", ") : "not cached";
+  }).catch(() => { $("dVer").textContent = "unavailable"; });
+} else {
+  $("dVer").textContent = "no cache";
+}
+
 $("stress").onchange = e => {
   clearInterval(stressTimer);
   if (e.target.checked){
@@ -2544,16 +2561,62 @@ renderPickers(); renderGrid(); renderBars(); renderTempo(); renderRun();
 buildPads(); resize(); stats();
 
 /* ============================== install ============================== */
+/* ------------------------------------------------------- update checking */
+/* Three things were wrong with waiting on controllerchange alone.
+
+   It fires on a FIRST install as well as on an update, because clients.claim()
+   claims a page that had no controller — so a brand-new visitor was told the
+   app had updated before they had ever had a version to update from. Whether
+   there was a controller when the page loaded is what tells the two apart.
+
+   Nothing ever re-checked. register() asks once, on load, and an installed PWA
+   resumed from the app switcher never navigates — so it can sit on an old
+   build indefinitely while a new one is live. Coming back to the foreground is
+   the moment to ask, and it costs one conditional request.
+
+   And the listener was attached after register(), so an update that installed
+   and claimed quickly could land before anything was listening for it.
+
+   The prompt stays a prompt. Reloading by itself would be tidier and would
+   also throw away whatever take was in progress, which on this app is the one
+   thing that cannot be recovered. */
 if ("serviceWorker" in navigator){
+  /* Read before registering: this is the fact that distinguishes a first
+     install from an update, and register() can change it. */
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+
+  const offerReload = () => {
+    if (reloading) return;
+    const t = $("toast");
+    t.style.display = "block";
+    t.onclick = () => { reloading = true; location.reload(); };
+  };
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController) return;   // the first claim is not an update
+    offerReload();
+  });
+
   addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").catch(()=>{});
-    let reloading = false;
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (reloading) return;
-      const t = $("toast");
-      t.style.display = "block";
-      t.onclick = () => { reloading = true; location.reload(); };
-    });
+    navigator.serviceWorker.register("sw.js").then(reg => {
+      if (!reg) return;
+      /* A worker already waiting means an update arrived while the page was
+         closed and never got to announce itself. */
+      if (reg.waiting && hadController) offerReload();
+
+      /* Ask again whenever the app comes back to the foreground. This is the
+         case an installed PWA actually hits: resumed rather than relaunched,
+         so no navigation happens and nothing else would ever ask. */
+      let asked = 0;
+      addEventListener("visibilitychange", () => {
+        if (document.visibilityState !== "visible") return;
+        const now = Date.now();
+        if (now - asked < 60000) return;    // not on every glance at the screen
+        asked = now;
+        reg.update().catch(()=>{});
+      });
+    }).catch(()=>{});
   });
 }
 </script>
