@@ -2187,16 +2187,20 @@ function runProgress(){
   if (el._last !== out){ el.textContent = out; el._last = out; }
 }
 
-function playSet(t){
+/* from is which drill to begin at; the set still runs to its end from there.
+   Clamped rather than trusted, because the index comes from a row that was
+   rendered before the press and the set could have been edited in between. */
+function playSet(t, from){
   if (!t.drills.length) return;
+  const i = Math.max(0, Math.min(t.drills.length - 1, from || 0));
   if (running) stop();
-  runSet = t; runIdx = 0;
-  applyDrill(t.drills[0]);
+  runSet = t; runIdx = i;
+  applyDrill(t.drills[i]);
   clearAll();
   start();
   showSets(false);
   renderRun();
-  flash("Running " + t.name);
+  flash(i ? "Running " + t.name + " from " + (i + 1) : "Running " + t.name);
 }
 
 function addToSet(t){
@@ -2291,6 +2295,17 @@ function renderSteps(t, host){
       st.len.n = secs ? 8 : 60;      // a sane default in the unit you switched to
       saveSet(t); renderSetModal();
     }, "unit"));
+    /* Start the set here rather than at its top. A set is often one drill you
+       are working on and several you have already got, and the only way to
+       reach the fourth was to sit through the first three — or to load it
+       alone and lose the run through the rest.
+
+       First of the row's controls, and the same glyph the set's own run button
+       uses, because it is the same act at a finer grain. The two that follow
+       act on this drill as well; the arrows and the cross edit the list. */
+    ctl.appendChild(mini("▶", "Play the set from this drill on", () => {
+      playSet(t, i);
+    }, "go"));
     /* Lifts a drill's configuration back out of the set and onto the page,
        without starting the set. Sets were the only place some configurations
        existed once they had been captured, so the only way back to one was to
