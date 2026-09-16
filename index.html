@@ -320,6 +320,12 @@
     background:var(--panel-hi);border:1px solid var(--true);
     box-shadow:0 0 18px -8px var(--true)}
   .runchip .rn{font-family:var(--fig);color:var(--true)}
+  /* Dimmer than the drill index beside it: two monospaced figures at equal
+     weight would read as one compound number. Tabular, and wide enough for the
+     longest thing it says, so the chip does not twitch as the count ticks. */
+  .runchip .rp{font-family:var(--fig);color:var(--ink-dim);
+    font-variant-numeric:tabular-nums;min-width:7ch;text-align:right}
+  .runchip .rp:empty{min-width:0}
 
   .setrow{border-top:1px solid var(--rule);padding-top:var(--sp2);margin-top:var(--sp2)}
   .setrow:first-child{border-top:none;padding-top:0;margin-top:0}
@@ -2098,6 +2104,7 @@ function drillDone(){
 }
 
 function tickSet(){
+  runProgress();
   if (!drillDone()) return;
   const last = runIdx + 1 >= runSet.drills.length;
   stop();        // captures the step just played as its own session
@@ -2135,11 +2142,49 @@ function renderRun(){
   const chip = $("runChip"), on = !!runSet && runIdx >= 0;
   chip.hidden = !on;
   if (on){
+    /* Two figures, and they must not read as the same kind of thing: which
+       drill of the set, then where you are inside that drill. The second is
+       aria-hidden because it changes every bar or every second, and a screen
+       reader reciting a countdown is worse than one that does not — the chip's
+       own label still says which drill is running, which is the part that
+       stays true long enough to be worth saying. */
     chip.innerHTML = runSet.name +
-      ' <span class="rn">' + (runIdx + 1) + '/' + runSet.drills.length + '</span>';
+      ' <span class="rn">' + (runIdx + 1) + '/' + runSet.drills.length + '</span>' +
+      ' <span class="rp" id="runProg" aria-hidden="true"></span>';
     label(chip, "Running " + runSet.name + ", drill " + (runIdx + 1) +
                 " of " + runSet.drills.length);
+    runProgress();
   }
+}
+
+/* Where you are inside the drill that is playing. A drill's length is written
+   in bars or in seconds, and this reports whichever it was written in: showing
+   a bar count for a timed drill would be a number the set editor never agreed
+   to, and would drift against it under a ramp.
+
+   Written only when the text changes. It is called every frame, and a drill
+   whose bar has not turned over has nothing new to say. */
+function runProgress(){
+  const el = $("runProg");
+  if (!el) return;
+  let out = "";
+  if (runIdx >= 0 && runSet && running && ctx){
+    const st = runSet.drills[runIdx];
+    const t  = ctx.currentTime - startTime;
+    if (t < 0){
+      /* The count-in belongs to no bar of the drill and has not started the
+         clock, so it says what it is rather than showing bar 0 or a countdown
+         standing still. */
+      out = "count in";
+    } else if (st.len.u === "sec"){
+      out = mmss(Math.max(0, Math.ceil(st.len.n - t)));
+    } else {
+      /* beatsAt, not elapsed time, so the count stays right under a ramp. */
+      const bar = Math.floor(beatsAt(t) / cfg.pattern.beats) + 1;
+      out = "bar " + Math.min(st.len.n, bar) + "/" + st.len.n;
+    }
+  }
+  if (el._last !== out){ el.textContent = out; el._last = out; }
 }
 
 function playSet(t){
