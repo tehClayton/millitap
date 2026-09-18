@@ -528,6 +528,13 @@
   .row>*{flex:1;min-width:0}
   .val{font-family:var(--fig);color:var(--ink);font-variant-numeric:tabular-nums}
   .note{font-size:12px;line-height:1.6;color:var(--ink-dim);max-width:62ch}
+  /* The answer, above the explanation of the question. Neutral while the test
+     has nothing to say yet, so it never states a verdict it has not earned. */
+  .verdict{font-size:12px;line-height:1.6;max-width:62ch;color:var(--ink);
+    padding:9px 11px;border-radius:var(--r1);background:rgba(255,255,255,.03);
+    border-left:3px solid var(--ink-mute)}
+  .verdict.good{border-left-color:var(--true)}
+  .verdict.bad{border-left-color:var(--miss)}
   .note b{color:var(--ink);font-weight:600}
   hr{border:none;border-top:1px solid var(--rule);margin:2px 0}
   .diag{font-family:var(--fig);font-size:11px;color:var(--ink-dim);
@@ -792,12 +799,12 @@
            person holding the phone. -->
       version &nbsp;<b id="dVer">—</b>
     </div>
-    <p class="note">This answers whether Safari's touch timestamps come from the hardware or from
-      whenever the page got round to handling them. Run a normal drill and note your spread. Turn
-      this on and run the same drill: it will deliberately stall the page, and the lag figure will
-      climb into the tens of milliseconds. <b>If lag climbs but your spread doesn't, the timestamps
-      are hardware-derived</b> and page stalls can't corrupt your readings. If spread climbs with
-      it, the web version has a ceiling and native is the fix.</p>
+    <p class="verdict" id="dVerdict">Switch on the stall below and play a drill to test this browser.</p>
+    <p class="note">Every figure this app reports assumes your browser stamps a tap when the
+      hardware delivered it, rather than when the page got round to handling it. If it is the
+      latter, the numbers carry whatever the page was busy with. It is worth knowing, and the
+      answer differs by browser and by device. Switching on the stall deliberately jams the
+      page; the reading above then says which kind of timestamp you are getting.</p>
     </div>
   </div>
 </div>
@@ -908,6 +915,19 @@ function polyOnsets(p){
 let ctx=null, running=false, startTime=0, clickFrom=0;
 let nextOnset=0, nextCell=0, targets=[], taps=[], missed=0, extra=0;
 let padEls=[], schedTimer=null, stressTimer=null;
+
+/* Lag samples taken while the stall is running, and only then. The stall is
+   what makes this test discriminating: a low figure without it means the page
+   was not busy, which proves nothing about where the timestamp came from. */
+let stressOn = false, stressLags = [];
+/* Below this many taps a run of low figures could just be taps that happened
+   to miss every stall. The stall burns 45ms in every 137, so a tap misses it
+   about two times in three — twelve consecutive misses is under a percent. */
+const STRESS_TAPS = 12;
+/* The stall is 45ms long, so a stamp that predates it can be up to that far
+   behind. Anything past a third of it could not have been written by the
+   handler that read it. */
+const HW_LAG_MS = 15;
 
 /* click is one state per grid cell: 0 off, 1 on, 2 accent. */
 /* bars is one flag per bar of the phrase: 1 sounds, 0 is silent. The targets
@@ -1175,6 +1195,9 @@ function schedule(){
 /* ============================== taps ============================== */
 function tap(voice, perfMs){
   const lag = performance.now() - perfMs;   // the diagnostic figure
+  /* Before the guards below: this measures how the event was delivered, which
+     is true whether or not the tap counted for anything. */
+  if (stressOn) stressLags.push(lag);
   flash(voice);
   if (!running || listen) return;
 
@@ -1282,6 +1305,44 @@ function stats(){
     const max  = Math.max(...recent.map(x=>x.lag));
     $("dLag").textContent = mean.toFixed(1) + " ms mean, " + max.toFixed(1) + " ms worst";
   }
+  verdict();
+}
+
+/* Does this browser stamp a tap when the hardware delivered it, or when the
+   page got round to handling it? The whole app rests on the answer: if the
+   stamp is written by the handler, every figure it reports has whatever the
+   page was busy with folded into it.
+
+   The old check asked for two drills and a comparison of spreads. The lag
+   figure answers it directly — under a deliberate stall, a stamp that predates
+   the stall reads as tens of milliseconds behind, and one written by the
+   handler cannot read as anything but zero. */
+function verdict(){
+  const el = $("dVerdict");
+  if (!el) return;
+  let text, tone = "";
+  if (!stressOn){
+    text = "Switch on the stall below and play a drill to test this browser.";
+  } else if (!stressLags.length){
+    text = "Stalling — play a drill and tap along.";
+  } else {
+    const worst = Math.max(...stressLags), n = stressLags.length;
+    if (worst >= HW_LAG_MS){
+      text = "Hardware-derived: a tap landed " + worst.toFixed(0) +
+             " ms behind the stall and still carried its own time. Page stalls " +
+             "cannot corrupt your readings on this browser.";
+      tone = "good";
+    } else if (n >= STRESS_TAPS){
+      text = "Assigned at handling: " + n + " taps under the stall and the worst " +
+             "was only " + worst.toFixed(0) + " ms. Readings on this browser " +
+             "inherit whatever the page is busy with.";
+      tone = "bad";
+    } else {
+      text = n + " of " + STRESS_TAPS + " taps under the stall — keep playing.";
+    }
+  }
+  if (el._said !== text){ el.textContent = text; el._said = text; }
+  el.className = "verdict" + (tone ? " " + tone : "");
 }
 
 /* ============================== canvas ============================== */
@@ -2609,12 +2670,15 @@ if (window.caches && caches.keys){
 
 $("stress").onchange = e => {
   clearInterval(stressTimer);
-  if (e.target.checked){
+  stressOn = !!e.target.checked;
+  stressLags = [];          // each run of the test answers for itself
+  if (stressOn){
     stressTimer = setInterval(() => {
       const end = performance.now() + 45;
       while (performance.now() < end){ /* burn */ }
     }, 137);
   } else { jank = 0; }
+  verdict();
 };
 
 renderPickers(); renderGrid(); renderBars(); renderTempo(); renderRun();
