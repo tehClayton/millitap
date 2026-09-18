@@ -570,6 +570,18 @@
   }
   .iconbtn.on{color:var(--true);background:var(--panel-hi);border-color:var(--rule)}
 
+  /* Deliberately the quietest thing in the panel. Muted ink, small, and the
+     links carry no button chrome — the register is a footer, not an ask. */
+  .about{padding-top:0}
+  .about p{font-family:var(--fig);font-size:11px;color:var(--ink-mute);
+    line-height:1.7}
+  .about b{font-weight:500;color:var(--ink-dim)}
+  .about .sep{opacity:.5;padding:0 2px}
+  .about a{color:var(--ink-dim);text-decoration:underline;
+    text-underline-offset:2px;text-decoration-color:var(--rule)}
+  .about a:hover{color:var(--ink);text-decoration-color:var(--ink-mute)}
+  .about a:focus-visible{outline:2px solid var(--true);outline-offset:2px}
+
   #toast{position:fixed;left:50%;transform:translateX(-50%);
     bottom:calc(var(--sp4) + env(safe-area-inset-bottom));
     background:var(--true);color:#0C1710;padding:11px 17px;border-radius:var(--r1);
@@ -793,11 +805,7 @@
     </div>
     <div class="diag" id="diagBox">
       touch→handler lag &nbsp;<b id="dLag">—</b><br>
-      worst frame gap &nbsp;<b id="dJank">—</b><br>
-      <!-- Which build is actually running. Without it, "did that deploy?" can
-           only be answered by reading the repository, which is no use to the
-           person holding the phone. -->
-      version &nbsp;<b id="dVer">—</b>
+      worst frame gap &nbsp;<b id="dJank">—</b>
     </div>
     <p class="verdict" id="dVerdict">Switch on the stall below and play a drill to test this browser.</p>
     <p class="note">Every figure this app reports assumes your browser stamps a tap when the
@@ -806,6 +814,30 @@
       answer differs by browser and by device. Switching on the stall deliberately jams the
       page; the reading above then says which kind of timestamp you are getting.</p>
     </div>
+  </div>
+
+  <!-- Metadata, not a donation bar. Plain text links in one quiet row read as
+       footer information; the same destinations as filled buttons would read
+       as a monetisation menu, which is a different thing to put in front of
+       someone using a free practice tool.
+
+       Ordered by commitment, lowest first: a reader scanning stops at the
+       first acceptable option, and leading with a recurring one sets a higher
+       bar than most people will clear on a settings screen. Which is which
+       lives in the hover text rather than in the line. -->
+  <div class="sect about">
+    <p>
+      millitap <b id="aboutVer">—</b>
+      <span class="sep">·</span>
+      <a href="https://github.com/tehClayton/millitap" id="aboutSrc"
+         target="_blank" rel="noopener noreferrer">source</a>
+      <span class="sep">·</span>
+      <a href="https://buymeacoffee.com/ditherstudio" id="aboutBmc"
+         target="_blank" rel="noopener noreferrer">buy me a coffee</a>
+      <span class="sep">·</span>
+      <a href="https://www.patreon.com/DitherStudio" id="aboutPat"
+         target="_blank" rel="noopener noreferrer">patreon</a>
+    </p>
   </div>
 </div>
 
@@ -2657,15 +2689,27 @@ $("scrim").onclick = () => { setSettings(false); showSets(false); showFeel(false
    survive it. Interval is prime-ish so it never locks to the beat. */
 /* Asked of the cache the running page was served from, rather than of a
    constant compiled into the page: a stale page reporting the version it
-   wished it were would be worse than no figure at all. */
+   wished it were would be worse than no figure at all.
+
+   It sits in the About line rather than in the diagnostics block, because the
+   question it answers — did that deploy, and am I on it — is asked by anyone,
+   and was previously two drawers down among figures about frame timing. */
+/* What each link is for, said on hover rather than in the line. The brand
+   names mostly carry it — a coffee reads as one-off — but not universally, and
+   spelling it out on screen would turn a footer into a pitch. label() sets the
+   title and the screen-reader name together, so the two cannot drift. */
+label($("aboutSrc"), "millitap on GitHub — the source and how to report a problem");
+label($("aboutBmc"), "Buy me a coffee — a one-off tip if this has been useful");
+label($("aboutPat"), "Patreon — support ongoing development");
+
 if (window.caches && caches.keys){
   caches.keys().then(ks => {
     const mine = ks.filter(k => k.indexOf("millitap-") === 0)
                    .map(k => k.slice("millitap-".length));
-    $("dVer").textContent = mine.length ? mine.join(", ") : "not cached";
-  }).catch(() => { $("dVer").textContent = "unavailable"; });
+    $("aboutVer").textContent = mine.length ? mine.join(", ") : "not cached";
+  }).catch(() => { $("aboutVer").textContent = "unavailable"; });
 } else {
-  $("dVer").textContent = "no cache";
+  $("aboutVer").textContent = "no cache";
 }
 
 $("stress").onchange = e => {
