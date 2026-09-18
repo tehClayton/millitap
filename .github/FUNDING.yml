@@ -1,0 +1,7 @@
+# Puts a Sponsor button on the repo page and in the sidebar. GitHub renders it
+# from this file alone — nothing is embedded in the app, and nothing here runs
+# any third-party script.
+#
+# Listed lowest-commitment first, which is the order GitHub renders them in.
+buy_me_a_coffee: ditherstudio
+patreon: DitherStudio

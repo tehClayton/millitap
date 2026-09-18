@@ -97,3 +97,15 @@ as 15.8 ms and is invisible; 15 ms reads as 21 ms and is obvious.
 
 See [CLAUDE.md](CLAUDE.md) for branching and commit conventions. Work goes on a
 branch and lands via pull request; `main` takes no direct commits.
+
+## Support
+
+millitap is free and has no accounts, no tracking and no backend — it is a page
+that runs on your device. If it has been useful,
+[buy me a coffee](https://buymeacoffee.com/ditherstudio) for a one-off tip, or
+[Patreon](https://www.patreon.com/DitherStudio) to support ongoing development.
+
+The link is a plain one, here and in the app. Neither loads anything from the
+funding platform, which would have meant third-party script in an app whose
+first principle is not having any, and a network dependency in one built to run
+without a network.
