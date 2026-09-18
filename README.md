@@ -66,22 +66,38 @@ numbers.
 
 ## The diagnostic
 
-Settings → *Jam the main thread*. This exists to settle one question: does Safari derive
-touch timestamps from the hardware, or from whenever the page got round to handling the
-event? On native iOS `UIEvent.timestamp` is hardware time; on Safari it's worth verifying
-rather than assuming.
+Settings → Advanced → *Jam the main thread*. This settles one question, and every figure
+the app reports depends on the answer: does your browser stamp a tap when the hardware
+delivered it, or when the page got round to handling the event? If it's the latter, the
+numbers carry whatever the page was busy with.
 
-Run a drill normally and note your spread. Turn the toggle on and run the same drill. It
-stalls the page on purpose, and the touch→handler lag figure will climb into the tens of
-milliseconds.
+The answer varies by engine and by device, so it's worth checking wherever you run this
+rather than assuming it from somewhere else. On native iOS `UIEvent.timestamp` is hardware
+time; on the web it is not guaranteed.
 
-- **Lag climbs, spread doesn't** → timestamps are hardware-derived. Page stalls can't
-  corrupt your readings, and the web version has no timing ceiling worth worrying about.
-- **Spread climbs with lag** → timestamps are handler-time. Every reading carries whatever
-  jitter the page had that frame, and a native port is the fix.
+Turn the toggle on and play a drill. The page is stalled on purpose, and the panel reports
+what it finds:
 
-Errors add in quadrature, so against a typical 15 ms spread, 5 ms of injected jitter reads
-as 15.8 ms and is invisible; 15 ms reads as 21 ms and is obvious.
+- **Hardware-derived** → a tap arrived tens of milliseconds late and still carried its own
+  time. Page stalls can't corrupt your readings, and the web version has no timing ceiling
+  worth worrying about.
+- **Assigned at handling** → taps under the stall never read as late, so the stamp is
+  written by the handler that reads it. Every reading carries whatever jitter the page had
+  that frame, and a native port is the fix.
+
+The two verdicts need different amounts of evidence, which is why one appears faster than
+the other. A single late-but-accurate tap proves the stamp predates the handler — nothing
+else could produce it. The opposite is a negative claim, so it waits for a dozen taps: the
+stall burns 45 ms in every 137, meaning a tap misses it about two times in three, and four
+low readings are four coincidences rather than a result.
+
+It reports nothing at all with the stall off. A low lag figure then only means the page
+wasn't busy, which is no evidence either way.
+
+This replaced an earlier method of running a drill twice and comparing the spread. Errors
+add in quadrature, so against a typical 15 ms spread, 5 ms of injected jitter reads as
+15.8 ms and is invisible — the lag figure answers directly what the spread could only
+hint at.
 
 ## Known limits vs. a native app
 
