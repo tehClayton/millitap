@@ -2363,13 +2363,26 @@ function renderSteps(t, host){
     len.setAttribute("aria-valuenow", st.len.n);
     // The unit lives on the toggle beside it, which both shows and changes it.
     len.innerHTML = "<b>" + st.len.n + "</b>";
+    /* For a ramped drill measured in seconds these are not two numbers, they
+       are one. snapshotDrill takes the length FROM the ramp, so letting the
+       length be edited on its own produced a set claiming 45 seconds and a
+       drill page still sweeping over 30 — and loading it back showed the
+       original, which looked like the edit had not saved.
+
+       Measured in bars they genuinely are separate, and Store.drillSeconds
+       already does the ramp arithmetic to convert. */
+    const tied = secs && st.ramp && st.ramp.on;
     scrubEl(len, {
       get: () => st.len.n,
       set: v => { st.len.n = v;
+                  if (tied) st.ramp.secs = v;
                   len.querySelector("b").textContent = v;
                   len.setAttribute("aria-valuenow", v);
                   sub.textContent = dur(); },
-      min: secs ? 5 : 1, max: secs ? 1800 : 64, step: secs ? 5 : 1, px: 3,
+      /* Tied to the ramp, it inherits the ramp field's ceiling too: a length
+         the drill page cannot represent is not a length this drill can have. */
+      min: secs ? 5 : 1, max: secs ? (tied ? TF.tSecs.max : 1800) : 64,
+      step: secs ? 5 : 1, px: 3,
       // The unit is on the toggle beside the field, not under the number, so
       // the bubble spells it out rather than floating a bare count.
       fmt: v => secs ? mmss(v) : v + (v === 1 ? " bar" : " bars"),
@@ -2385,7 +2398,11 @@ function renderSteps(t, host){
        any icon that could have replaced it. */
     ctl.appendChild(mini(st.len.u, "Measured in " + st.len.u + ", tap to change", () => {
       st.len.u = secs ? "bars" : "sec";
-      st.len.n = secs ? 8 : 60;      // a sane default in the unit you switched to
+      /* A sane default in the unit you switched to — and for a ramped drill
+         switching back to seconds, the sane default is the ramp it already
+         has, not a stock minute that would silently rewrite the sweep. */
+      st.len.n = secs ? 8
+               : (st.ramp && st.ramp.on ? st.ramp.secs : 60);
       saveSet(t); renderSetModal();
     }, "unit"));
     /* Start the set here rather than at its top. A set is often one drill you
